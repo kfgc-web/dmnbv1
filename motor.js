@@ -16,17 +16,17 @@
    ------------------------------------------------------------
    API PÚBLICA (os "verbos" do jogo):
      criarPartida(jogadores)            -> cria a partida pronta
-     calcularReforcos(estado, id)       -> quantos reforços rende
-     posicionarReforco(estado, t, qtd)  -> põe reforços num território
+     calcularReforcos(estado, id)       -> detalha reforços { base, porRegiao, ordem, total }
+     posicionarReforco(estado, t, qtd)  -> põe reforços num território (respeita a restrição de região)
      terminarReforco(estado)            -> fecha reforços, abre ataque
      atacar(estado, origem, destino)    -> 1 ataque (1 rolagem)
      terminarAtaque(estado)             -> fecha ataque, abre remanejo
-     remanejar(estado, orig, dest, qtd) -> 1 movimento de fim de turno
+     remanejar(estado, orig, dest, qtd) -> 1 pulo de remanejamento (vários por turno; trava por exército)
      passarVez(estado)                  -> fecha o turno e chama o próximo
 
    CONSULTAS (perguntas, não mudam nada):
      territoriosDe, contarExercitos, regioesDominadas,
-     inimigosVizinhos, ehFronteira, jogadoresVivos,
+     inimigosVizinhos, ehFronteira, frescosEm, jogadoresVivos,
      verificarVitoria, resumoJogadores
 
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
@@ -36,8 +36,9 @@
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
        fase:              "reforco",    // reforco|ataque|remanejamento|fim
-       reforcosPendentes: 0,            // reforços que faltam posicionar
-       remanejouNesteTurno: false,
+       reforcosPendentes: 0,            // total de reforços que faltam posicionar
+       reforco:           {...},        // detalhamento do reforço: { base, porRegiao, ordem }
+       movidos:           {...},        // por território: exércitos que JÁ moveram nesta fase de remanejo (travados)
        vencedor:          null,         // id quando alguém vence
        ultimoEvento:      {...},        // último acontecimento (p/ a tela)
        log:               [ "...", ]    // histórico curto (p/ depurar/feed)
@@ -56,6 +57,14 @@ const BASE_POR_TERRITORIO = 1;
 
 const MIN_REFORCO = 3;          // todo turno rende no mínimo isto
 const REGIOES_PARA_VENCER = 5;  // ter 5 das 8 regiões inteiras = vitória
+
+// Ordem fixa em que os bônus de região são posicionados (Modo B, sequência
+// guiada). Usa as CHAVES REAIS de REGIOES. O reforço-base (geral) vem por
+// último — ele não entra aqui porque não é preso a nenhuma região.
+const ORDEM_REGIOES_REFORCO = [
+  "Irlanda", "Dál-Riata", "Escócia", "Northumbria",
+  "Mércia", "Ânglia Oriental", "Wessex", "Gales",
+];
 
 const LADOS_DADO = 8;           // dado de 8 lados (d8)
 const MAX_DADOS_ATAQUE = 4;     // atacante rola até 4
@@ -149,6 +158,14 @@ function ehFronteira(estado, territorio) {
   return inimigosVizinhos(estado, territorio).length > 0;
 }
 
+// Exércitos "frescos" num território: os que AINDA NÃO se moveram nesta fase
+// de remanejamento (só eles podem mover). Fora da fase de remanejo, ou logo no
+// início dela, todos são frescos (movidos vazio => 0 movidos).
+function frescosEm(estado, territorio) {
+  const jaMovidos = (estado.movidos && estado.movidos[territorio]) || 0;
+  return estado.territorios[territorio].exercitos - jaMovidos;
+}
+
 // Jogadores ainda vivos (com pelo menos 1 território).
 function jogadoresVivos(estado) {
   return estado.jogadores.filter(function (j) { return j.vivo; });
@@ -222,7 +239,8 @@ function criarPartida(jogadores) {
     turno: 1,
     fase: "reforco",
     reforcosPendentes: 0,
-    remanejouNesteTurno: false,
+    reforco: null,               // detalhamento do reforço do jogador da vez (montado abaixo)
+    movidos: {},                 // controle de remanejamento (frescos × movidos), por território
     vencedor: null,
     ultimoEvento: { tipo: "inicio" },
     log: [],
@@ -237,8 +255,10 @@ function criarPartida(jogadores) {
   });
 
   // Primeiro turno já montado: o jogador 0 recebe seu lote de reforços
-  // (territórios ÷ 3, mínimo 3) para posicionar — igual a todos os turnos.
-  estado.reforcosPendentes = calcularReforcos(estado, 0);
+  // (base = territórios ÷ 3, mínimo 3; + bônus por região completa) para posicionar.
+  const det0 = calcularReforcos(estado, 0);
+  estado.reforco = { base: det0.base, porRegiao: det0.porRegiao, ordem: det0.ordem };
+  estado.reforcosPendentes = det0.total;
   anotar(estado, "Partida criada. Territórios distribuídos.");
   return estado;
 }
@@ -247,21 +267,40 @@ function criarPartida(jogadores) {
 /* ----------------------------------------------------------------
    REFORÇOS
    ---------------------------------------------------------------- */
-// Quantos reforços o jogador recebe neste turno:
-//   (territórios ÷ 3, arredondado para o MAIS PRÓXIMO, com mínimo 3)
-//   + bônus de cada região que ele domina inteira.
+// Detalha os reforços do jogador neste turno:
+//   base  = territórios ÷ 3 (arredondado ao MAIS PRÓXIMO, mínimo 3) -> GERAL,
+//           pode ser posicionado em qualquer território seu.
+//   porRegiao = { região: bônus } para cada região que ele domina INTEIRA;
+//           esse bônus fica PRESO à própria região (só entra em território dela).
+//   ordem = as regiões de porRegiao já na ordem fixa (ORDEM_REGIOES_REFORCO),
+//           para a sequência guiada da tela (Modo B).
+//   total = base + soma dos bônus (é o que vai em estado.reforcosPendentes).
 // Obs.: como x/3 nunca dá ,50 exato (só ,33 ou ,67), o Math.round não
 // tem ambiguidade — ,33 desce e ,67 sobe.
 function calcularReforcos(estado, idJogador) {
   const nTerritorios = territoriosDe(estado, idJogador).length;
   const base = Math.max(MIN_REFORCO, Math.round(nTerritorios / 3));
-  const bonus = regioesDominadas(estado, idJogador).reduce(function (soma, r) {
-    return soma + bonusDaRegiao(r);
-  }, 0);
-  return base + bonus;
+
+  const dominadas = regioesDominadas(estado, idJogador);
+  const porRegiao = {};
+  let somaBonus = 0;
+  ORDEM_REGIOES_REFORCO.forEach(function (r) {
+    if (dominadas.indexOf(r) !== -1) {
+      const b = bonusDaRegiao(r);
+      if (b > 0) { porRegiao[r] = b; somaBonus += b; }
+    }
+  });
+
+  const ordem = ORDEM_REGIOES_REFORCO.filter(function (r) { return porRegiao[r] > 0; });
+  return { base: base, porRegiao: porRegiao, ordem: ordem, total: base + somaBonus };
 }
 
 // Posiciona "qtd" reforços num território do jogador da vez.
+// Restrição (Modo B): o bônus de uma região SÓ pode entrar em território
+// daquela região; o reforço-base (geral) entra em qualquer território seu.
+// Ao posicionar, consome primeiro o bolsão da região do território (o menos
+// flexível) e só depois o geral. A ORDEM guiada é responsabilidade da tela;
+// aqui vale a restrição.
 function posicionarReforco(estado, territorio, qtd) {
   if (qtd == null) qtd = 1;
   if (estado.fase !== "reforco")
@@ -271,8 +310,27 @@ function posicionarReforco(estado, territorio, qtd) {
   if (alvo.dono !== estado.vez)
     return { ok: false, erro: "Esse território não é seu." };
   if (qtd < 1) return { ok: false, erro: "Quantidade inválida." };
-  if (qtd > estado.reforcosPendentes)
-    return { ok: false, erro: "Você só tem " + estado.reforcosPendentes + " reforço(s) para posicionar." };
+
+  // Bolsões disponíveis para ESTE território: o da sua região (se houver) + o geral.
+  const rf = estado.reforco || { base: estado.reforcosPendentes, porRegiao: {}, ordem: [] };
+  const regiao = regiaoDe(territorio);
+  const daRegiao = (rf.porRegiao && rf.porRegiao[regiao]) || 0;
+  const disponivel = daRegiao + rf.base;
+  if (qtd > disponivel) {
+    if (daRegiao < qtd && rf.base < qtd && daRegiao === 0)
+      return { ok: false, erro: "Você só tem " + rf.base + " de reforço geral para posicionar." };
+    return { ok: false, erro: "Não há reforço suficiente para " + territorio + " (máximo " + disponivel + ")." };
+  }
+
+  // Consome o bolsão da região primeiro, depois o geral.
+  let restante = qtd;
+  const usarRegiao = Math.min(daRegiao, restante);
+  if (usarRegiao > 0) {
+    rf.porRegiao[regiao] -= usarRegiao;
+    restante -= usarRegiao;
+    if (rf.porRegiao[regiao] <= 0) delete rf.porRegiao[regiao];
+  }
+  if (restante > 0) { rf.base -= restante; restante = 0; }
 
   alvo.exercitos += qtd;
   estado.reforcosPendentes -= qtd;
@@ -378,21 +436,29 @@ function terminarAtaque(estado) {
   if (estado.fase !== "ataque")
     return { ok: false, erro: "Não é a fase de ataque." };
   estado.fase = "remanejamento";
+  // Início do remanejamento: TODOS os exércitos entram "frescos" (movidos vazio).
+  // Isso inclui os que avançaram para um território conquistado durante o ataque
+  // — a trava só conta movimentos feitos DENTRO da fase de remanejamento.
+  estado.movidos = {};
   estado.ultimoEvento = { tipo: "faseRemanejo" };
   return { ok: true };
 }
 
 
 /* ----------------------------------------------------------------
-   REMANEJAMENTO — um movimento de fim de turno (opcional)
+   REMANEJAMENTO — vários pulos por turno, com trava por exército
    ---------------------------------------------------------------- */
-// Move exércitos de um território seu para um VIZINHO seu, deixando ao
-// menos 1 para trás. Na v1 é UM movimento por turno (sem encadear).
+// Cada chamada é UM pulo entre dois territórios seus que fazem fronteira.
+// Pode-se chamar quantas vezes quiser na fase. Regras:
+//   - só os exércitos "frescos" (que ainda não se moveram nesta fase) podem sair;
+//   - sempre fica pelo menos 1 exército na origem (não esvaziar);
+//   - ao chegar ao destino, os exércitos que vieram TRAVAM (viram "movidos"),
+//     então não se movem de novo nesta fase. Os que já estavam no destino e
+//     ainda estão frescos continuam livres para um próximo pulo.
 function remanejar(estado, origem, destino, qtd) {
   if (estado.fase !== "remanejamento")
     return { ok: false, erro: "Não é a fase de remanejamento." };
-  if (estado.remanejouNesteTurno)
-    return { ok: false, erro: "Você já remanejou neste turno." };
+  if (!estado.movidos) estado.movidos = {};
   const a = estado.territorios[origem];
   const d = estado.territorios[destino];
   if (!a) return { ok: false, erro: 'Território "' + origem + '" não existe.' };
@@ -401,13 +467,20 @@ function remanejar(estado, origem, destino, qtd) {
     return { ok: false, erro: "Os dois territórios precisam ser seus." };
   if (vizinhosDe(origem).indexOf(destino) === -1)
     return { ok: false, erro: origem + " e " + destino + " não são vizinhos." };
-  if (qtd < 1) return { ok: false, erro: "Quantidade inválida." };
-  if (qtd > a.exercitos - 1)
-    return { ok: false, erro: "Precisa deixar pelo menos 1 exército para trás." };
+  if (qtd == null || qtd < 1) return { ok: false, erro: "Quantidade inválida." };
+
+  const frescos = frescosEm(estado, origem);   // só estes podem sair
+  if (frescos <= 0)
+    return { ok: false, erro: "Esses exércitos já se moveram nesta fase." };
+  const limite = Math.min(frescos, a.exercitos - 1); // e sempre deixa 1 na origem
+  if (qtd > limite)
+    return { ok: false, erro: "Só dá para mover " + Math.max(0, limite) + " daqui (tropa fresca, deixando 1)." };
 
   a.exercitos -= qtd;
   d.exercitos += qtd;
-  estado.remanejouNesteTurno = true;
+  // Os que chegaram travam no destino. Na origem, movidos[origem] não muda
+  // (só saíram exércitos frescos; os já-travados continuam contados lá).
+  estado.movidos[destino] = ((estado.movidos && estado.movidos[destino]) || 0) + qtd;
   estado.ultimoEvento = { tipo: "remanejo", origem: origem, destino: destino, qtd: qtd };
   return { ok: true };
 }
@@ -448,8 +521,10 @@ function passarVez(estado) {
 
   estado.vez = proximo;
   estado.fase = "reforco";
-  estado.remanejouNesteTurno = false;
-  estado.reforcosPendentes = calcularReforcos(estado, proximo);
+  estado.movidos = {};                 // zera o controle de remanejamento
+  const det = calcularReforcos(estado, proximo);
+  estado.reforco = { base: det.base, porRegiao: det.porRegiao, ordem: det.ordem };
+  estado.reforcosPendentes = det.total;
   estado.ultimoEvento = { tipo: "novaVez", jogador: proximo, reforcos: estado.reforcosPendentes };
   return { ok: true, vez: proximo, reforcos: estado.reforcosPendentes };
 }

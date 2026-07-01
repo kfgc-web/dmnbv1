@@ -115,11 +115,12 @@ function botValorAlvo(estado, id, alvo) {
 /* ----------------------------------------------------------------
    FASE 1 — REFORÇO
    ----------------------------------------------------------------
-   Posiciona os reforços nas FRONTEIRAS (territórios que encostam em
-   inimigo), nunca no interior calmo. Estratégia: "encho cada fronteira
-   só o suficiente pra vencer o ataque que quero, começando pelas mais
-   valiosas (as que fecham/avançam região), e o que sobrar empilho na
-   melhor de todas (excesso = soco garantido)."
+   Agora o reforço vem em bolsões (Modo B): um por região completa (preso
+   à própria região) na ordem fixa + o reforço-base GERAL. O bot:
+     (1) para cada bônus de região, concentra na melhor FRONTEIRA daquela
+         região (bônus preso => concentrar abre um bom ataque ali);
+     (2) espalha o geral nas fronteiras, "water-filling" como antes
+         (enche cada fronteira até vencer o alvo, sobra na mais valiosa).
    ---------------------------------------------------------------- */
 function botReforcar(estado) {
   const id = estado.vez;
@@ -129,21 +130,70 @@ function botReforcar(estado) {
   const meus = territoriosDe(estado, id);
   if (meus.length === 0) return { ok: true, colocados: 0 };
 
+  const rf = estado.reforco || { base: estado.reforcosPendentes, porRegiao: {}, ordem: [] };
+  let colocados = 0;
+
+  // (1) BÔNUS DE REGIÃO — cada bolsão preso à sua própria região, na ordem fixa.
+  (rf.ordem || []).forEach(function (r) {
+    const qtd = (rf.porRegiao && rf.porRegiao[r]) || 0;
+    if (qtd <= 0) return;
+    const alvo = botMelhorTerritorioPraReforco(estado, id, territoriosDaRegiao(r));
+    if (!alvo) return;
+    const rr = posicionarReforco(estado, alvo, qtd);
+    if (rr.ok) colocados += qtd;
+  });
+
+  // (2) REFORÇO-BASE (geral) — o que sobrou (== reforcosPendentes) nas fronteiras.
+  if (estado.reforcosPendentes > 0) {
+    colocados += botEspalharGeral(estado, id, estado.reforcosPendentes);
+  }
+
+  return { ok: true, colocados: colocados };
+}
+
+// Melhor território de uma LISTA para receber reforço (usado nos bônus de
+// região): prefere as fronteiras (maior valor de alvo) e, se não houver
+// fronteira na lista, o território com mais tropa. Só considera os meus.
+function botMelhorTerritorioPraReforco(estado, id, lista) {
+  const meus = lista.filter(function (t) { return estado.territorios[t].dono === id; });
+  if (meus.length === 0) return null;
+  const front = meus.filter(function (t) { return ehFronteira(estado, t); });
+  const cand = front.length ? front : meus;
+  let alvo = cand[0], melhorV = -Infinity;
+  cand.forEach(function (t) {
+    let v;
+    const alvos = inimigosVizinhos(estado, t);
+    if (alvos.length) {
+      v = -Infinity;
+      for (let i = 0; i < alvos.length; i++) {
+        const vv = botValorAlvo(estado, id, alvos[i]);
+        if (vv > v) v = vv;
+      }
+    } else {
+      v = -1e6 + estado.territorios[t].exercitos; // sem inimigo à vista: baixa prioridade
+    }
+    if (v > melhorV) { melhorV = v; alvo = t; }
+  });
+  return alvo;
+}
+
+// Espalha "total" reforços GERAIS nas fronteiras (water-filling). Devolve
+// quantos de fato colocou. Os bônus de região já foram posicionados antes,
+// então aqui o estado já reflete essas tropas.
+function botEspalharGeral(estado, id, total) {
+  const meus = territoriosDe(estado, id);
   const fronteiras = meus.filter(function (t) { return ehFronteira(estado, t); });
 
-  // Caso raro: sem nenhuma fronteira (cercado só pelos próprios territórios).
-  // Empilha tudo onde já tenho mais tropa e segue o jogo.
+  // Sem nenhuma fronteira: empilha onde já tenho mais tropa e segue o jogo.
   if (fronteiras.length === 0) {
     let alvo = meus[0];
     for (let i = 1; i < meus.length; i++) {
       if (estado.territorios[meus[i]].exercitos > estado.territorios[alvo].exercitos) alvo = meus[i];
     }
-    const total = estado.reforcosPendentes;
-    posicionarReforco(estado, alvo, total);
-    return { ok: true, colocados: total };
+    const r = posicionarReforco(estado, alvo, total);
+    return r.ok ? total : 0;
   }
 
-  // Para cada fronteira: qual o melhor alvo dela e quantos exércitos ela tem.
   const infos = fronteiras.map(function (t) {
     const alvos = inimigosVizinhos(estado, t);
     let melhorV = -Infinity, exDefMelhor = 1;
@@ -153,30 +203,52 @@ function botReforcar(estado) {
     }
     return { t: t, valor: melhorV, exDef: exDefMelhor, exAtual: estado.territorios[t].exercitos };
   });
-
-  // Prioriza as fronteiras mais valiosas.
   infos.sort(function (a, b) { return b.valor - a.valor; });
 
-  // "Water-filling": completa cada fronteira até (exDef + folga), na ordem de valor.
-  let restante = estado.reforcosPendentes;
+  let restante = total;
   const aloc = {};
   for (let i = 0; i < infos.length && restante > 0; i++) {
-    const nivel = infos[i].exDef + BOT_FOLGA_REFORCO; // alvo de tropas pra atacar bem
+    const nivel = infos[i].exDef + BOT_FOLGA_REFORCO;
     const falta = Math.max(0, nivel - infos[i].exAtual);
     const add = Math.min(falta, restante);
     if (add > 0) { aloc[infos[i].t] = (aloc[infos[i].t] || 0) + add; restante -= add; }
   }
-  // Sobrou reforço? Empilha tudo na fronteira mais valiosa.
   if (restante > 0) { aloc[infos[0].t] = (aloc[infos[0].t] || 0) + restante; restante = 0; }
 
-  // Aplica de fato no motor.
   let colocados = 0;
   Object.keys(aloc).forEach(function (t) {
     const r = posicionarReforco(estado, t, aloc[t]);
     if (r.ok) colocados += aloc[t];
   });
+  return colocados;
+}
 
-  return { ok: true, colocados: colocados };
+// Rede de segurança: se por acaso sobrou reforço (não deveria), drena
+// respeitando a restrição — bônus de região num território da própria região
+// (o dono da região tem todos eles), depois o geral em qualquer território meu.
+function botDrenarReforco(estado, id) {
+  let trava = 0;
+  while (estado.reforcosPendentes > 0 && trava < 400) {
+    trava++;
+    const rf = estado.reforco || { base: estado.reforcosPendentes, porRegiao: {}, ordem: [] };
+    const regsPend = Object.keys(rf.porRegiao || {}).filter(function (r) { return rf.porRegiao[r] > 0; });
+    if (regsPend.length) {
+      const r = regsPend[0];
+      const terrs = territoriosDaRegiao(r).filter(function (t) { return estado.territorios[t].dono === id; });
+      if (terrs.length) {
+        const rr = posicionarReforco(estado, terrs[0], rf.porRegiao[r]);
+        if (rr.ok) continue;
+      }
+      // não deu para drenar esse bolsão (estado estranho): descarta p/ não travar a fase
+      estado.reforcosPendentes -= rf.porRegiao[r];
+      delete rf.porRegiao[r];
+      continue;
+    }
+    const meus = territoriosDe(estado, id);
+    if (meus.length === 0) break;
+    const rr = posicionarReforco(estado, meus[0], estado.reforcosPendentes);
+    if (!rr.ok) break;
+  }
 }
 
 
@@ -231,57 +303,63 @@ function botAtacar(estado) {
 
 
 /* ----------------------------------------------------------------
-   FASE 3 — REMANEJAMENTO (um movimento, opcional)
+   FASE 3 — REMANEJAMENTO (agora vários pulos, com trava por exército)
    ----------------------------------------------------------------
-   Puxa a maior pilha de um território CALMO do interior para a linha
-   de frente. Como na v1 é um único movimento (sem encadear), o destino
-   precisa ser um vizinho meu; prefiro o que JÁ é fronteira, senão um
-   que esteja a um passo dela. Se a tropa estiver no fundo sem caminho
-   pro front neste turno, não mexo (turno que vem o front muda).
+   Empurra tropa FRESCA de territórios calmos do interior rumo à linha de
+   frente, um pulo por vez. Como cada exército só se move uma vez na fase
+   (trava ao chegar), o número de movimentos é finito e o loop termina.
+   A cada volta escolhe o melhor par (origem calma com frescos -> destino meu
+   vizinho), ranqueando o destino: 2 = é fronteira; 1 = vizinho de fronteira.
    ---------------------------------------------------------------- */
 function botRemanejar(estado) {
   const id = estado.vez;
   if (estado.fase !== "remanejamento") return { ok: false, erro: "Não é a fase de remanejamento." };
-  if (estado.remanejouNesteTurno) return { ok: true, moveu: 0 };
 
-  const meus = territoriosDe(estado, id);
+  const TETO = 200; // cinto de segurança (o loop já termina sozinho)
+  let movimentos = 0;
 
-  // Origens possíveis: meus territórios NÃO-fronteira com tropa sobrando.
-  const origens = meus.filter(function (t) {
-    return !ehFronteira(estado, t) && estado.territorios[t].exercitos >= 2;
-  });
-  if (origens.length === 0) return { ok: true, moveu: 0 };
+  while (movimentos < TETO) {
+    const meus = territoriosDe(estado, id);
 
-  // Acha o melhor par (origem -> destino meu vizinho), ranqueando o destino:
-  //   2 = é fronteira (linha de frente)
-  //   1 = tem um vizinho meu que é fronteira (um passo do front)
-  //   0 = fundo seguro (ignora)
-  let melhor = null; // { origem, destino, rank, sobra }
-  origens.forEach(function (o) {
-    const sobra = estado.territorios[o].exercitos - 1; // deixa 1 pra trás
-    vizinhosDe(o).forEach(function (d) {
-      if (estado.territorios[d].dono !== id) return;    // destino tem de ser meu
-      let rank = 0;
-      if (ehFronteira(estado, d)) {
-        rank = 2;
-      } else {
-        const vizs = vizinhosDe(d);
-        for (let i = 0; i < vizs.length; i++) {
-          if (estado.territorios[vizs[i]].dono === id && ehFronteira(estado, vizs[i])) { rank = 1; break; }
-        }
-      }
-      if (rank === 0) return;
-      if (melhor === null || rank > melhor.rank ||
-          (rank === melhor.rank && sobra > melhor.sobra)) {
-        melhor = { origem: o, destino: d, rank: rank, sobra: sobra };
-      }
+    // Origens: meus territórios NÃO-fronteira, com tropa FRESCA sobrando
+    // (>= 1 fresco e total >= 2, para poder deixar 1 para trás).
+    const origens = meus.filter(function (t) {
+      return !ehFronteira(estado, t) &&
+             estado.territorios[t].exercitos >= 2 &&
+             frescosEm(estado, t) >= 1;
     });
-  });
+    if (origens.length === 0) break;
 
-  if (melhor === null) return { ok: true, moveu: 0 };
+    let melhor = null; // { origem, destino, rank, qtd }
+    origens.forEach(function (o) {
+      const podeMover = Math.min(frescosEm(estado, o), estado.territorios[o].exercitos - 1);
+      if (podeMover < 1) return;
+      vizinhosDe(o).forEach(function (dst) {
+        if (estado.territorios[dst].dono !== id) return; // destino tem de ser meu
+        let rank = 0;
+        if (ehFronteira(estado, dst)) {
+          rank = 2;
+        } else {
+          const vizs = vizinhosDe(dst);
+          for (let i = 0; i < vizs.length; i++) {
+            if (estado.territorios[vizs[i]].dono === id && ehFronteira(estado, vizs[i])) { rank = 1; break; }
+          }
+        }
+        if (rank === 0) return;
+        if (melhor === null || rank > melhor.rank ||
+            (rank === melhor.rank && podeMover > melhor.qtd)) {
+          melhor = { origem: o, destino: dst, rank: rank, qtd: podeMover };
+        }
+      });
+    });
 
-  const r = remanejar(estado, melhor.origem, melhor.destino, melhor.sobra);
-  return { ok: r.ok, moveu: r.ok ? melhor.sobra : 0 };
+    if (melhor === null) break; // nenhuma tropa do fundo com caminho pro front
+    const r = remanejar(estado, melhor.origem, melhor.destino, melhor.qtd);
+    if (!r.ok) break; // segurança
+    movimentos++;
+  }
+
+  return { ok: true, moveu: movimentos };
 }
 
 
@@ -309,16 +387,9 @@ function jogarTurnoBot(estado) {
   // (1) Reforço
   if (estado.fase === "reforco") {
     acoes.reforco = botReforcar(estado);
-    // Rede de segurança: se sobrou reforço por qualquer motivo, despeja
-    // em qualquer território meu pra poder fechar a fase.
-    let trava = 0;
-    while (estado.reforcosPendentes > 0 && trava < 200) {
-      const meus = territoriosDe(estado, jogador);
-      if (meus.length === 0) break;
-      const rr = posicionarReforco(estado, meus[0], estado.reforcosPendentes);
-      if (!rr.ok) break;
-      trava++;
-    }
+    // Rede de segurança: se sobrou reforço por qualquer motivo, drena
+    // respeitando a restrição de região, pra poder fechar a fase.
+    botDrenarReforco(estado, jogador);
     terminarReforco(estado); // abre o ataque
   }
 

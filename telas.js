@@ -102,6 +102,21 @@ const VIEW_W=1000, VIEW_H=1300;
   function corDe(t) { return estado.jogadores[estado.territorios[t].dono].cor; }
   function texto(t) { return estado.territorios[t]; }
 
+  // Bolsão de reforço ativo (Modo B): a primeira região da ordem que ainda tem
+  // bônus a posicionar; se todas zeraram, o reforço-base GERAL; se acabou, null.
+  function reforcoAtivo() {
+    const rf = estado.reforco;
+    if (!rf) return null;
+    let regiao = null;
+    (rf.ordem || []).some(function (r) {
+      if ((rf.porRegiao[r] || 0) > 0) { regiao = r; return true; }
+      return false;
+    });
+    if (regiao) return { modo: "regiao", regiao: regiao, qtd: rf.porRegiao[regiao] };
+    if (rf.base > 0) return { modo: "geral", qtd: rf.base };
+    return null;
+  }
+
   // texto preto ou branco conforme a cor de fundo
   function corTexto(hex) {
     const c = hex.replace("#", "");
@@ -194,6 +209,7 @@ const VIEW_W=1000, VIEW_H=1300;
   // -------- render (atualiza cores, números, destaques, painel) --------
   function render() {
     if (!estado) return;
+    const minhaVez = (estado.vez === HUMANO && !animando && estado.vencedor === null);
     // nós
     Object.keys(TERRITORIOS).forEach(function (t) {
       const cor = corDe(t);
@@ -202,7 +218,19 @@ const VIEW_W=1000, VIEW_H=1300;
       elArmy[t].textContent = texto(t).exercitos;
       elRing[t].setAttribute("class", "ring"); // limpa
     });
-    // destaques
+    // destaque do reforço (Modo B): acende os territórios onde o bolsão ativo
+    // pode entrar — só a região da vez, ou o mapa todo no reforço geral.
+    if (minhaVez && estado.fase === "reforco") {
+      const ativo = reforcoAtivo();
+      if (ativo) {
+        Object.keys(TERRITORIOS).forEach(function (t) {
+          if (estado.territorios[t].dono !== HUMANO) return;
+          if (ativo.modo === "geral" || regiaoDe(t) === ativo.regiao)
+            elRing[t].setAttribute("class", "ring dest");
+        });
+      }
+    }
+    // destaques de seleção (ataque / remanejamento)
     if (selecao) {
       elRing[selecao].setAttribute("class", "ring origin");
       if (estado.fase === "ataque") {
@@ -230,7 +258,11 @@ const VIEW_W=1000, VIEW_H=1300;
 
     reinf.innerHTML = "";
     if (minhaVez && estado.fase === "reforco") {
-      reinf.innerHTML = "Reforços a posicionar: <b>" + estado.reforcosPendentes + "</b>";
+      const ativo = reforcoAtivo();
+      if (ativo && ativo.modo === "regiao")
+        reinf.innerHTML = "Bônus de <b>" + ativo.regiao + "</b>: <b>" + ativo.qtd + "</b> a posicionar";
+      else if (ativo && ativo.modo === "geral")
+        reinf.innerHTML = "Reforço geral: <b>" + ativo.qtd + "</b> a posicionar";
     }
 
     if (estado.vencedor !== null) {
@@ -238,15 +270,19 @@ const VIEW_W=1000, VIEW_H=1300;
     } else if (!minhaVez) {
       instr.textContent = "Aguarde — os outros comandantes estão movendo seus exércitos.";
     } else if (estado.fase === "reforco") {
-      instr.textContent = "Toque nos seus territórios para distribuir os reforços.";
+      const ativo = reforcoAtivo();
+      if (ativo && ativo.modo === "regiao")
+        instr.textContent = "Bônus da região " + ativo.regiao + ": toque nos territórios dela (destacados) para posicionar.";
+      else
+        instr.textContent = "Reforço geral: toque em qualquer território seu (destacado) para posicionar.";
     } else if (estado.fase === "ataque") {
       instr.textContent = selecao
         ? "Atacando de " + selecao + ". Toque num vizinho inimigo destacado — ou toque " + selecao + " de novo para cancelar."
         : "Toque num território seu (2+ exércitos) que faça fronteira com inimigo para atacar a partir dele.";
     } else if (estado.fase === "remanejamento") {
       instr.textContent = selecao
-        ? "Toque num vizinho SEU para onde mover a tropa."
-        : "Opcional: toque num território seu (2+ exércitos) para mover tropa de lá para um vizinho seu.";
+        ? "Toque num vizinho SEU para mover a tropa (quem chega trava ali nesta fase)."
+        : "Opcional — mova quantas vezes quiser: toque num território seu com tropa fresca (2+) para levá-la a um vizinho seu.";
     }
 
     renderAcoes(minhaVez);
@@ -266,9 +302,8 @@ const VIEW_W=1000, VIEW_H=1300;
     const box = document.getElementById("actions");
     box.innerHTML = "";
     if (!minhaVez) return;
-    if (estado.fase === "reforco") {
-      box.appendChild(botao("Terminar reforço", "primary", acaoTerminarReforco, estado.reforcosPendentes > 0));
-    } else if (estado.fase === "ataque") {
+    // Fase de reforço: sem botão — quando o total zera, a tela avança sozinha (3.4-bis).
+    if (estado.fase === "ataque") {
       box.appendChild(botao("Terminar ataque", "", acaoTerminarAtaque));
       box.appendChild(botao("Passar vez", "ghost", acaoPassar));
     } else if (estado.fase === "remanejamento") {
@@ -328,9 +363,25 @@ const VIEW_W=1000, VIEW_H=1300;
 
   function cliqueReforco(t) {
     if (estado.territorios[t].dono !== HUMANO) return toast("Esse território não é seu.");
+    const ativo = reforcoAtivo();
+    if (!ativo) return; // nada a posicionar (o auto-avanço já cuida da transição)
+    if (ativo.modo === "regiao" && regiaoDe(t) !== ativo.regiao)
+      return toast("Agora é o bônus de " + ativo.regiao + " — toque num território dessa região.");
     const r = posicionarReforco(estado, t, 1);
     if (!r.ok) return toast(r.erro);
     render();
+    if (estado.reforcosPendentes === 0) autoAvancarReforco();
+  }
+
+  // Auto-avanço (3.4-bis): quando o total de reforços zera, dá um respiro
+  // (~0,3s) para o jogador ver o último soldado cair e então abre o ataque.
+  function autoAvancarReforco() {
+    render();
+    setTimeout(function () {
+      if (estado.fase !== "reforco" || estado.reforcosPendentes !== 0) return;
+      const r = terminarReforco(estado);
+      if (r.ok) { selecao = null; render(); }
+    }, 300);
   }
 
   function cliqueAtaque(t) {
@@ -365,10 +416,10 @@ const VIEW_W=1000, VIEW_H=1300;
 
   function cliqueRemanejo(t) {
     const d = estado.territorios[t];
-    if (estado.remanejouNesteTurno) return toast("Você já remanejou neste turno.");
     if (selecao === null) {
       if (d.dono !== HUMANO) return toast("Escolha um território seu de origem.");
-      if (d.exercitos < 2) return toast("Sem tropa de sobra (precisa de 2+).");
+      if (frescosEm(estado, t) < 1) return toast("Esses exércitos já se moveram nesta fase.");
+      if (Math.min(frescosEm(estado, t), d.exercitos - 1) < 1) return toast("Sem tropa de sobra (precisa deixar 1).");
       const temViz = vizinhosDe(t).some(function (v) { return estado.territorios[v].dono === HUMANO; });
       if (!temViz) return toast("Esse território não tem vizinho seu para receber tropa.");
       selecao = t; destinoSel = null; render(); return;
@@ -377,12 +428,11 @@ const VIEW_W=1000, VIEW_H=1300;
     if (d.dono !== HUMANO) return toast("Escolha um vizinho SEU.");
     if (vizinhosDe(selecao).indexOf(t) === -1) return toast("Não é vizinho de " + selecao + ".");
     destinoSel = t;
-    qtdMover = estado.territorios[selecao].exercitos - 1; // padrão: leva tudo menos 1
+    qtdMover = Math.min(frescosEm(estado, selecao), estado.territorios[selecao].exercitos - 1); // padrão: leva o máximo movível
     render();
   }
 
   // -------- botões de ação --------
-  function acaoTerminarReforco() { const r = terminarReforco(estado); if (!r.ok) return toast(r.erro); selecao = null; render(); }
   function acaoTerminarAtaque() { const r = terminarAtaque(estado); if (!r.ok) return toast(r.erro); selecao = null; render(); }
   function acaoPassar() {
     selecao = null; destinoSel = null;
@@ -392,13 +442,14 @@ const VIEW_W=1000, VIEW_H=1300;
 
   // stepper do remanejamento
   function moverAjuste(delta) {
-    const max = estado.territorios[selecao].exercitos - 1;
+    const max = Math.min(frescosEm(estado, selecao), estado.territorios[selecao].exercitos - 1);
     qtdMover = Math.max(1, Math.min(max, qtdMover + delta));
     render();
   }
   function moverConfirmar() {
     const r = remanejar(estado, selecao, destinoSel, qtdMover);
     if (!r.ok) return toast(r.erro);
+    // Não encerra a fase: o jogador pode continuar remanejando (vários pulos).
     selecao = null; destinoSel = null; render();
   }
   function moverCancelar() { destinoSel = null; render(); }
@@ -470,7 +521,7 @@ const VIEW_W=1000, VIEW_H=1300;
     const ov = document.getElementById("overlay");
     ov.innerHTML =
       '<div class="modal">' +
-        "<h2>War Britânico</h2>" +
+        "<h2>Domination: Britannia</h2>" +
         '<p class="lead">Conquiste a ilha. Cada território começa com 1 exército; no seu turno você recebe reforços, ataca e (se quiser) remaneja, depois passa a vez.</p>' +
         '<div class="rules">' +
           "Vença dominando <b>5 das 8 regiões</b> inteiras (ou sobrando o último de pé).<br>" +
