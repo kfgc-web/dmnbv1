@@ -2,14 +2,25 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes, viewport-fit=cover">
 <title>Domination: Britannia</title>
+<!-- app instalável (PWA): manifesto, ícones e cor da barra -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e1116">
+<link rel="icon" type="image/png" sizes="32x32" href="icones/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Domination">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <!-- ?v=N: número de versão. Aumente a cada atualização para o navegador
-     buscar os arquivos novos em vez de usar a cópia guardada. -->
-<link rel="stylesheet" href="estilo.css?v=13">
+     buscar os arquivos novos em vez de usar a cópia guardada — e troque
+     também VERSAO em sw.js para o MESMO número (é o que avisa o app). -->
+<link rel="stylesheet" href="estilo.css?v=14">
 </head>
 <body>
 <div id="app">
@@ -21,6 +32,7 @@
     <div class="tool">
       <button class="iconbtn ghost" id="zoomOut" title="Diminuir">−</button>
       <button class="iconbtn ghost" id="zoomIn" title="Ampliar">+</button>
+      <button class="ghost" id="instalarBtn" hidden>Instalar</button>
       <button class="ghost" id="painelBtn" aria-controls="panel">Painel ▴</button>
       <button class="ghost" id="newGame">Novo jogo</button>
     </div>
@@ -75,11 +87,22 @@
 <div id="overlay"></div>
 <div id="toast"></div>
 
-<script src="mapa.js?v=13"></script>
-<script src="motor.js?v=13"></script>
-<script src="bots.js?v=13"></script>
-<script src="desenho.js?v=13"></script>
-<script src="cartas.js?v=13"></script>
-<script src="telas.js?v=13"></script>
+<!-- celular em pé: o jogo é só deitado -->
+<div id="gireAviso" role="alert">
+  <div class="gireIcone" aria-hidden="true"></div>
+  <p class="gireTitulo">Gire o celular</p>
+  <p class="gireTexto">Domination: Britannia é jogado com o celular deitado.</p>
+</div>
+
+<!-- versão nova do app baixada: toque para atualizar -->
+<button id="atualizaBanner" hidden></button>
+
+<script src="mapa.js?v=14"></script>
+<script src="motor.js?v=14"></script>
+<script src="bots.js?v=14"></script>
+<script src="desenho.js?v=14"></script>
+<script src="cartas.js?v=14"></script>
+<script src="telas.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

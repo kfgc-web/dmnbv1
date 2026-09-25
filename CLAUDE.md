@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (modos novos).
+Última atualização: 25/09/2026 (app no celular).
 
 ---
 
@@ -20,10 +20,10 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Kauã é o diretor criativo; Claude faz toda a engenharia.** Kauã não é técnico: explicações sempre acessíveis, sem jargão.
 - **Protocolo:** esclarecer → confirmar → **"pode ir"** → agir. Nada de mudar arquivos do jogo antes do OK explícito. Protótipos e maquetes para Kauã avaliar (fora do repositório) podem ser feitos antes.
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
-- **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` (evita o navegador usar arquivo velho guardado).
+- **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` **e `VERSAO` em `sw.js` para o mesmo N** (é o que faz o app instalado mostrar "Nova versão disponível"; o teste da tela confere que os dois batem). Arquivo novo do jogo → acrescentar na lista `ARQUIVOS` do `sw.js`.
 - **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno e a vitória certa de cada modo). Precisa terminar em "tudo certo, zero falhas".
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
-- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar) e o layout do celular (cabeçalho, metade da tela, rolagem única). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
+- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar), celular em pé (aviso de girar), celular deitado (mapa à esquerda, painel à direita, rolagem única), tablet em pé e o app (versão do sw.js, manifesto, funciona sem internet, aviso de versão nova e atualização). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
 
 ## 3. Regras do jogo
 
@@ -95,7 +95,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 
 ## 4. Arquitetura — arquivos
 
-Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → telas.js** (+ `estilo.css`), todos com `?v=N`.
+Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → telas.js → app.js** (+ `estilo.css`), todos com `?v=N`.
 
 | Arquivo | Papel |
 |---|---|
@@ -107,7 +107,11 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 | `desenho.js` | **Gerado** pelo gerador (§6) — não editar à mão. Litoral, contorno de cada território, divisas, lagos, rotas, posição das peças e dos nomes de região |
 | `cartas.js` | Só o **visual** das cartas (SVG): pergaminho, borda trançada celta, faixa com nome, silhueta do território, medalhão do símbolo |
 | `telas.js` | Toda a interface: tabuleiro, painel, janelas (início, troca de cartas, conquista, vitória), dados, zoom |
-| `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `stress.js` (stress dos bots) e `teste-tela.js` (teste no navegador) |
+| `app.js` | O jogo como app: registra o `sw.js`, aviso "Nova versão disponível" (só recarrega quando o jogador toca), botão "Instalar" (quando o navegador oferece), trava deitado no app instalado |
+| `sw.js` | Service worker: guarda os arquivos (`ARQUIVOS`, com `VERSAO`) para abrir sem internet; versão nova espera o toque no aviso; guarda também as fontes do Google |
+| `manifest.webmanifest` | Dados do app: nome "Domination: Britannia" (curto "Domination"), tela cheia, **deitado**, ícones |
+| `icones/` | `icone-fonte.webp` (arte do escudo, feita por IA a pedido de Kauã) e os PNG gerados por `ferramentas/gerar-icones.js` (192/512, maskable com margem para o círculo do Android, apple-touch, favicon) |
+| `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `gerar-icones.js`, `stress.js` (stress dos bots) e `teste-tela.js` (teste no navegador) |
 
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
@@ -124,7 +128,8 @@ Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" 
 - **Dados** aparecem em cima da batalha e somem em 1,5 s.
 - **Zoom** pelos botões + / − (mantém o centro).
 - **Botão "Painel"** no cabeçalho recolhe o painel (fica só a vez, a fase e os botões) — pensado para o celular; a escolha fica guardada no navegador.
-- **Celular (retrato):** painel aberto ocupa **metade da tela** e rola como **uma página só** (sem rolagens separadas por seção); o mapa fica na outra metade.
+- **Celular: só deitado** (decisão de Kauã). Em pé (largura ≤ 600) aparece o aviso **"Gire o celular"** cobrindo tudo. Deitado (altura ≤ 540): cabeçalho baixo, mapa à esquerda (no zoom 1 a ilha inteira cabe na altura), painel de 270 px à direita rolando como **uma página só**; janelas roláveis; respeita o entalhe (`safe-area`).
+- **Tablet em pé** (até 860 de largura): painel embaixo ocupando metade da tela, rolando como uma página só.
 - Painel mostra o **modo** e a meta do jogador: objetivo (Clássico), lado (Grande Exército), equipe e regiões da equipe (Equipes), pontos (Partida Rápida).
 - `HUMANO` (assento do jogador) é definido em `novoJogo`: no Grande Exército e no Equipes não é o assento 0.
 - Bots jogam com pausa (~780 ms); territórios que trocam de dono piscam.
@@ -169,11 +174,12 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 7. **Escolha de quantos exércitos entram na conquista** — depois limitada a 1, 2 ou 3.
 8. **Modos Clássico (17 objetivos), Domínio e Conquista Total**; botão de recolher o painel; cabeçalho ajustado ao celular.
 9. Playtest no celular aprovado; Rixa de Sangue só sorteada contra cores presentes.
-10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos.
+10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos. Playtest de Kauã aprovado; dados mantidos (4 d8 × 3 d8 — simulação mostrou equilíbrio); 3×3 fica como está (aparece com 5 adversários).
+11. **App no celular (PWA)**: instalável, abre sem internet, avisa versão nova; ícone do escudo; jogo só deitado no celular.
 
 ## 8. Próximos passos (ordem combinada)
 
-1. ~~Playtest de Kauã no celular~~ — ok. Ajuste que saiu dele: Rixa de Sangue só contra cores presentes.
-2. **Playtest dos modos novos** (Partida Rápida, Grande Exército, Equipes) — e ajustes que saírem dele. Nos testes só de bots, os Vikings vencem pouco no Grande Exército (ver §3); Kauã decide se mexe no equilíbrio.
-3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
-4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
+1. **Playtest do app no celular** (instalar, jogar deitado, sem internet) — e ajustes que saírem dele.
+2. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e até 9 assentos (Grande Exército). Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
+   - Junto com o online: **escolha de cor** de cada jogador na sala (decidido deixar para lá; hoje a cor é do assento — a Rixa de Sangue terá de olhar a cor, não o assento). No Grande Exército as cores seguem fixas por reino.
+3. Ideia anotada: **salvar a partida** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida).
