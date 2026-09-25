@@ -305,45 +305,29 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function abrirConquista(r, origem, destino) {
     const ov = document.getElementById("overlay");
     if (!estado.conquista) { escolhendoConquista = false; render(); return; }
-    const max = r.podeFicarAte;
-    let qtd = Math.min(max, Math.max(1, r.dadosAtaque.length));
+    const max = r.podeFicarAte; // 2 ou 3 (com 1 só não há escolha)
+    let botoes = "";
+    for (let n = 1; n <= max; n++) botoes += '<button class="conqOpcao" data-n="' + n + '">' + n + "</button>";
     ov.innerHTML =
       '<div class="modal modalConquista">' +
         "<h2>" + destino + " é seu!</h2>" +
-        '<p class="lead">Quantos exércitos entram vindos de <b>' + origem + "</b>? Pode ser de 1 a " + max +
-          " (sempre fica 1 em " + origem + ").</p>" +
-        '<div class="conqLinha">' +
-          '<button class="ghost" id="conqMin">Mín.</button>' +
-          '<button class="iconbtn" id="conqMenos" aria-label="Menos">−</button>' +
-          '<span class="qty conqQtd" id="conqQtd"></span>' +
-          '<button class="iconbtn" id="conqMais" aria-label="Mais">+</button>' +
-          '<button class="ghost" id="conqMax">Máx.</button>' +
-        "</div>" +
-        '<p class="conqResto" id="conqResto"></p>' +
-        '<button class="primary" id="conqOk" style="width:100%">Confirmar</button>' +
+        '<p class="lead">Quantos exércitos entram vindos de <b>' + origem + "</b>?</p>" +
+        '<div class="conqLinha">' + botoes + "</div>" +
+        '<p class="conqResto">No máximo 3, sempre deixando 1 em ' + origem + ".</p>" +
       "</div>";
     ov.classList.add("on");
-    function atualizar() {
-      ov.querySelector("#conqQtd").textContent = qtd;
-      const fica = estado.territorios[origem].exercitos + estado.territorios[destino].exercitos - qtd;
-      ov.querySelector("#conqResto").textContent = destino + ": " + qtd + " · " + origem + ": " + fica;
-    }
-    function muda(v) { qtd = Math.max(1, Math.min(max, v)); atualizar(); }
-    ov.querySelector("#conqMin").addEventListener("click", function () { muda(1); });
-    ov.querySelector("#conqMax").addEventListener("click", function () { muda(max); });
-    ov.querySelector("#conqMenos").addEventListener("click", function () { muda(qtd - 1); });
-    ov.querySelector("#conqMais").addEventListener("click", function () { muda(qtd + 1); });
-    ov.querySelector("#conqOk").addEventListener("click", function () {
-      const m = moverNaConquista(estado, qtd);
-      if (!m.ok) return toast(m.erro);
-      ov.classList.remove("on");
-      escolhendoConquista = false;
-      // segue atacando da origem, se ainda der
-      const o = estado.territorios[origem];
-      selecao = (o.exercitos >= 2 && inimigosVizinhos(estado, origem).length > 0) ? origem : null;
-      render();
+    ov.querySelectorAll(".conqOpcao").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const m = moverNaConquista(estado, Number(b.dataset.n));
+        if (!m.ok) return toast(m.erro);
+        ov.classList.remove("on");
+        escolhendoConquista = false;
+        // segue atacando da origem, se ainda der
+        const o = estado.territorios[origem];
+        selecao = (o.exercitos >= 2 && inimigosVizinhos(estado, origem).length > 0) ? origem : null;
+        render();
+      });
     });
-    atualizar();
   }
 
   // -------- cartas (painel + janela de troca) --------

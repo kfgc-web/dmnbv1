@@ -189,9 +189,11 @@
   /* ---------- conquista: quantos entram ---------- */
   .modal.modalConquista{ max-width:380px; }
   .modal .lead b{ color:var(--bone); }
-  .conqLinha{ display:flex; align-items:center; justify-content:center; gap:8px; margin:0 0 10px; }
-  .conqQtd{ font-size:28px; font-weight:700; min-width:48px; text-align:center; font-variant-numeric:tabular-nums; color:#ece5d4; }
-  .conqResto{ text-align:center; font-size:13px; color:var(--muted); margin:0 0 18px; font-variant-numeric:tabular-nums; }
+  .conqLinha{ display:flex; align-items:center; justify-content:center; gap:12px; margin:0 0 12px; }
+  .conqOpcao{ width:64px; height:64px; font-size:26px; font-weight:700; font-family:"Cinzel",Georgia,serif;
+    border-radius:12px; border-color:var(--bone-dim); }
+  .conqOpcao:hover{ background:var(--bone) !important; color:#1a140a; }
+  .conqResto{ text-align:center; font-size:12.5px; color:var(--muted); margin:0; }
 
   /* ---------- toast ---------- */
   #toast{
