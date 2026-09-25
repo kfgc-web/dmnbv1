@@ -165,6 +165,12 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
      - **Vitória viking:** Northhymbre + Mierce + East Engle + Westseaxe inteiras (na hora).
      - **Vitória dos reinos:** vikings eliminados → vence o reino **vivo** com mais **pontos** (1 ponto por exército viking derrotado, no ataque e na defesa). Reino eliminado fica fora. Desempate: quem destruiu o último território viking → mais territórios → mais exércitos → cada empatado rola 1 d6, maior vence (rola de novo se empatar).
      - Reinos podem se atacar; bots quase não atacam aliados (sem forçar). Sem limite de tempo. Painel mostra o placar de pontos.
-   - **Duplas/Trios:** adiado. Problema aberto: sem atacar aliado, como fechar região (bônus)?
+   - **Equipes (definido):**
+     - Formatos: 4 jogadores = 2×2; 6 = 3×3 ou 2×2×2. Com outro nº de jogadores o modo não aparece.
+     - Equipes **sorteadas** pelo jogo; vezes **alternadas** entre equipes, sequência sorteada e fixa na partida.
+     - **Sem ataque ao parceiro** e **sem remanejar** para território do parceiro. Cartas individuais, sem troca entre parceiros.
+     - **Bônus de região da equipe:** região toda nas mãos da equipe conta como fechada; o bônus vai inteiro para o parceiro com mais territórios nela (empate: mais exércitos lá; depois, quem joga antes).
+     - **Vitória:** equipe com **5 das 8 regiões** fechadas (somando parceiros; checado no fim do turno, como no Domínio) ou que eliminar todos os adversários.
+     - Parceiro eliminado: o resto da equipe segue; cartas do eliminado vão para quem o eliminou. Marquinha da equipe nas peças.
 3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
 4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
