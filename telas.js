@@ -19,7 +19,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   "use strict";
 
   const SVGNS = "http://www.w3.org/2000/svg";
-  const HUMANO = 0;             // assento 0 = jogador humano ("Você")
+  let HUMANO = 0;               // assento do jogador humano ("Você"); muda no Grande Exército e no Equipes
   const DELAY_BOT = 780;        // pausa entre turnos de bots (ms), p/ dar de ver
   const R_DISC = 12;            // raio da peça (disco) do território
 
@@ -32,7 +32,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   let zoom = 1;
 
   // refs de elementos SVG por território
-  const elDisc = {}, elArmy = {}, elRing = {};
+  const elDisc = {}, elArmy = {}, elRing = {}, elEquipe = {};
 
   // -------- util --------
   function E(tag, attrs) {
@@ -54,8 +54,22 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       return false;
     });
     if (regiao) return { modo: "regiao", regiao: regiao, qtd: rf.porRegiao[regiao] };
+    if (rf.mar > 0) return { modo: "mar", qtd: rf.mar };
     if (rf.base > 0) return { modo: "geral", qtd: rf.base };
     return null;
+  }
+
+  // O território pode receber o bolsão ativo?
+  function cabeNoAtivo(ativo, t) {
+    if (ativo.modo === "regiao") return regiaoDe(t) === ativo.regiao;
+    if (ativo.modo === "mar") return !!TERRITORIOS[t].litoral;
+    return true;
+  }
+
+  // Nome para mostrar: no Grande Exército, com o reino ("Você · Mierce").
+  function nomeDe(id) {
+    const j = estado.jogadores[id];
+    return j.reino && j.reino !== j.nome ? j.nome + " · " + j.reino : j.nome;
   }
 
   // texto preto ou branco conforme a cor de fundo
@@ -147,10 +161,16 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       const army = E("text", { class: "army", x: p[0], y: p[1] });
       const terr = E("text", { class: "terr", x: p[0], y: p[1] + R_DISC + 10 });
       terr.textContent = t;
-      g.appendChild(ring); g.appendChild(disc); g.appendChild(army); g.appendChild(terr);
+      // marquinha da equipe (só no modo Equipes): letra num circulinho
+      const eq = E("g", { class: "eqBadge", style: "display:none" });
+      const bx = p[0] + R_DISC * 0.78, by = p[1] - R_DISC * 0.78;
+      eq.appendChild(E("circle", { cx: bx, cy: by, r: 6 }));
+      const eqT = E("text", { x: bx, y: by });
+      eq.appendChild(eqT);
+      g.appendChild(ring); g.appendChild(disc); g.appendChild(army); g.appendChild(terr); g.appendChild(eq);
       g.addEventListener("click", function () { onClick(t); });
       gNode.appendChild(g);
-      elDisc[t] = disc; elArmy[t] = army; elRing[t] = ring;
+      elDisc[t] = disc; elArmy[t] = army; elRing[t] = ring; elEquipe[t] = { g: eq, t: eqT };
     });
     svg.appendChild(gNode);
     afastarNomes();
@@ -205,6 +225,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       elDisc[t].setAttribute("fill", cor);
       elArmy[t].setAttribute("fill", corTexto(cor));
       elArmy[t].textContent = texto(t).exercitos;
+      if (estado.modo === "equipes") {
+        elEquipe[t].g.style.display = "";
+        elEquipe[t].t.textContent = NOMES_EQUIPE[estado.jogadores[texto(t).dono].equipe];
+      } else elEquipe[t].g.style.display = "none";
       marcar(t, ""); // limpa
     });
     // destaque do reforço (Modo B): acende os territórios onde o bolsão ativo
@@ -214,8 +238,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       if (ativo) {
         Object.keys(TERRITORIOS).forEach(function (t) {
           if (estado.territorios[t].dono !== HUMANO) return;
-          if (ativo.modo === "geral" || regiaoDe(t) === ativo.regiao)
-            marcar(t, "dest");
+          if (cabeNoAtivo(ativo, t)) marcar(t, "dest");
         });
       }
     }
@@ -236,10 +259,11 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function renderPainel() {
     const j = estado.jogadores[estado.vez];
     document.getElementById("turnDot").style.background = j.cor;
-    document.getElementById("turnWho").textContent = animando ? (j.nome + " está jogando…") : j.nome;
+    document.getElementById("turnWho").textContent = animando ? (nomeDe(j.id) + " está jogando…") : nomeDe(j.id);
 
     const fases = { reforco: "Reforço", ataque: "Ataque", remanejamento: "Remanejamento", fim: "Fim de jogo" };
-    document.getElementById("phaseTag").textContent = estado.vencedor !== null ? "Fim de jogo" : fases[estado.fase];
+    document.getElementById("phaseTag").textContent = (estado.vencedor !== null ? "Fim de jogo" : fases[estado.fase]) +
+      (estado.modo === "rapida" ? " · Rodada " + Math.min(estado.turno, RODADAS_RAPIDA) + " de " + RODADAS_RAPIDA : "");
 
     const reinf = document.getElementById("reinf");
     const instr = document.getElementById("instr");
@@ -250,6 +274,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       const ativo = reforcoAtivo();
       if (ativo && ativo.modo === "regiao")
         reinf.innerHTML = "Bônus de <b>" + ativo.regiao + "</b>: <b>" + ativo.qtd + "</b> a posicionar";
+      else if (ativo && ativo.modo === "mar")
+        reinf.innerHTML = "Reforço do mar: <b>" + ativo.qtd + "</b> a posicionar";
       else if (ativo && ativo.modo === "geral")
         reinf.innerHTML = "Reforço geral: <b>" + ativo.qtd + "</b> a posicionar";
     }
@@ -262,6 +288,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       const ativo = reforcoAtivo();
       if (ativo && ativo.modo === "regiao")
         instr.textContent = "Bônus da região " + ativo.regiao + ": toque nos territórios dela (destacados) para posicionar.";
+      else if (ativo && ativo.modo === "mar")
+        instr.textContent = "Reforço do mar: toque num território seu no litoral (destacado) para posicionar.";
       else
         instr.textContent = "Reforço geral: toque em qualquer território seu (destacado) para posicionar.";
     } else if (estado.fase === "ataque") {
@@ -316,6 +344,15 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         ? '<p class="objTexto oculto">Seu objetivo está escondido.</p>'
         : '<p class="objNome">' + d.nome + '</p><p class="objTexto">' + d.texto +
           (d.reserva ? ' <i class="objMotivo">Sua Rixa de Sangue virou Bretwalda porque ' + d.motivo + ".</i>" : "") + "</p>";
+    } else if (estado.modo === "grande") {
+      html += '<p class="objNome">Você é: ' + estado.jogadores[HUMANO].reino + '</p><p class="objTexto">' + descreverMeta(estado, HUMANO) + "</p>";
+    } else if (estado.modo === "equipes") {
+      const eq = estado.jogadores[HUMANO].equipe;
+      html += '<p class="objNome"><span class="eqTag">' + NOMES_EQUIPE[eq] + "</span> Sua equipe: " +
+        regioesDaEquipe(estado, eq).length + "/5 regiões</p>" +
+        '<p class="objTexto">' + descreverMeta(estado, HUMANO) + " Não dá para atacar o parceiro nem passar exércitos para ele.</p>";
+    } else if (estado.modo === "rapida") {
+      html += '<p class="objNome">Seus pontos: ' + pontosRapida(estado, HUMANO) + '</p><p class="objTexto">' + MODOS.rapida.resumo + "</p>";
     } else {
       html += '<p class="objTexto">' + MODOS[estado.modo].resumo + "</p>";
     }
@@ -479,12 +516,25 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       const row = document.createElement("div");
       row.className = "prow" + (r.id === estado.vez && estado.vencedor === null ? " turn" : "") + (r.vivo ? "" : " dead");
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.cor;
-      const name = document.createElement("span"); name.className = "pname"; name.textContent = r.nome;
+      const name = document.createElement("span"); name.className = "pname"; name.textContent = nomeDe(r.id);
       const stat = document.createElement("span"); stat.className = "stat";
       stat.textContent = r.territorios + "⬡ · " + r.exercitos + "⚔ · " + r.cartas + "▯";
-      row.appendChild(dot); row.appendChild(name);
-      if (r.regioes.length) {
-        const rg = document.createElement("span"); rg.className = "rg"; rg.textContent = r.regioes.length + "/5";
+      row.appendChild(dot);
+      if (r.equipe !== null) {
+        const tag = document.createElement("span"); tag.className = "eqTag"; tag.textContent = NOMES_EQUIPE[r.equipe];
+        tag.title = "Equipe " + NOMES_EQUIPE[r.equipe];
+        row.appendChild(tag);
+      }
+      row.appendChild(name);
+      // placar ao lado do nome: pontos (Rápida e reinos do Grande Exército),
+      // regiões da meta (Vikings), regiões da equipe, ou regiões inteiras (x/5)
+      let rgTxt = "";
+      if (estado.modo === "rapida" || (estado.modo === "grande" && r.reino !== "Vikings")) rgTxt = r.pontos + " pts";
+      else if (estado.modo === "grande") rgTxt = r.regioes.filter(function (x) { return META_VIKINGS.indexOf(x) !== -1; }).length + "/4";
+      else if (estado.modo === "equipes") rgTxt = regioesDaEquipe(estado, r.equipe).length + "/5";
+      else if (r.regioes.length) rgTxt = r.regioes.length + "/5";
+      if (rgTxt) {
+        const rg = document.createElement("span"); rg.className = "rg"; rg.textContent = rgTxt;
         row.appendChild(rg);
       }
       row.appendChild(stat);
@@ -516,6 +566,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (!ativo) return; // nada a posicionar (o auto-avanço já cuida da transição)
     if (ativo.modo === "regiao" && regiaoDe(t) !== ativo.regiao)
       return toast("Agora é o bônus de " + ativo.regiao + " — toque num território dessa região.");
+    if (ativo.modo === "mar" && !TERRITORIOS[t].litoral)
+      return toast("O reforço do mar só entra em território no litoral.");
     if (trocaObrigatoria(estado)) return abrirCartas(true);
     const r = posicionarReforco(estado, t, 1);
     if (!r.ok) return toast(r.erro);
@@ -668,6 +720,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     html += "</div></div>";
     let res = "Você perdeu " + r.perdasAtacante + " · inimigo perdeu " + r.perdasDefensor;
     if (r.conquistou) res = '<span class="win">Conquistou ' + destino + "!</span>";
+    if (r.pontos) res += " · +" + r.pontos + " ponto" + (r.pontos > 1 ? "s" : "");
     html += '<div class="dres">' + res + "</div>";
     box.innerHTML = html;
     box.classList.remove("on"); void box.offsetWidth; // reinicia a animação
@@ -695,46 +748,85 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- modais --------
+  // Tela de início: nº de adversários, modo (só os que cabem nesse nº) e as
+  // opções do modo (formato das equipes; lado no Grande Exército).
   function mostrarInicio() {
     const ov = document.getElementById("overlay");
-    let modo = "classico";
+    let modo = "classico", adv = 3, tamEquipe = 2, lado = REINOS_GRANDE[0];
     const opcoesModo = Object.keys(MODOS).map(function (m) {
       return '<button class="modoOpcao" data-modo="' + m + '" aria-pressed="false"><b>' + MODOS[m].nome + "</b><span>" + MODOS[m].resumo + "</span></button>";
+    }).join("");
+    const opcoesLado = REINOS_GRANDE.map(function (r) {
+      return '<button class="ladoOpcao" data-lado="' + r + '" aria-pressed="false"><span class="dot" style="background:' + COR_REINO[r] + '"></span>' + r + "</button>";
     }).join("");
     ov.innerHTML =
       '<div class="modal modalInicio">' +
         "<h2>Domination: Britannia</h2>" +
-        '<p class="lead">Conquiste a ilha. Cada território começa com 1 exército; no seu turno você recebe reforços, ataca e (se quiser) remaneja, depois passa a vez.</p>' +
+        '<p class="lead">Conquiste a ilha. No seu turno você recebe reforços, ataca e (se quiser) remaneja, depois passa a vez.</p>' +
+        '<div class="field" id="advField"><span class="flabel">Adversários (bots)</span>' +
+          '<div class="stepper"><button class="iconbtn" id="advMinus">−</button>' +
+          '<span class="qty" id="advQty">3</span>' +
+          '<button class="iconbtn" id="advPlus">+</button></div>' +
+        "</div>" +
         '<div class="flabel" style="margin-bottom:8px">Modo de jogo</div>' +
         '<div class="modos">' + opcoesModo + "</div>" +
+        '<div class="modoExtra" id="extraEquipes">' +
+          '<div class="flabel">Formato das equipes</div>' +
+          '<div class="formatos" id="formatos"></div>' +
+          '<p class="extraNota">O jogo sorteia as equipes e a ordem das vezes (alternando entre as equipes).</p>' +
+        "</div>" +
+        '<div class="modoExtra" id="extraGrande">' +
+          '<div class="flabel">Seu lado</div>' +
+          '<div class="lados">' + opcoesLado + "</div>" +
+          '<p class="extraNota">Sempre 9 lugares: os outros 8 são bots. Os Vikings começam com 7 exércitos em Eoforwic, Streoneshalh, Mameceaster, Northfolc e Suthfolc e jogam primeiro.</p>' +
+        "</div>" +
         '<div class="rules">' +
           "Combate em <b>d8</b>: o ataque rola até <b>4</b> dados, a defesa até <b>3</b>; comparam-se os maiores e o <b>empate é da defesa</b>.<br>" +
           "Só ataca quem tem <b>2+</b> exércitos. Ao conquistar, entram <b>1, 2 ou 3</b>.<br>" +
           "Conquistou no turno? Ganha <b>1 carta</b>. Troque 3 iguais ou 3 diferentes por exércitos: <b>4, 6, 8, 10, 12, 15, 18, 20</b>, depois +5." +
         "</div>" +
-        '<div class="field"><span class="flabel">Adversários (bots)</span>' +
-          '<div class="stepper"><button class="iconbtn" id="advMinus">−</button>' +
-          '<span class="qty" id="advQty">3</span>' +
-          '<button class="iconbtn" id="advPlus">+</button></div>' +
-        "</div>" +
         '<button class="primary" id="startBtn" style="width:100%">Começar</button>' +
       "</div>";
     ov.classList.add("on");
-    function marcarModo() {
+    const q = ov.querySelector("#advQty");
+    function atualizar() {
+      const n = adv + 1;
+      if (!modoDisponivel(modo, n)) modo = "classico";
+      if (n !== 6) tamEquipe = 2;
+      q.textContent = adv;
+      ov.querySelector("#advField").style.display = modo === "grande" ? "none" : "";
       ov.querySelectorAll(".modoOpcao").forEach(function (b) {
         const on = b.dataset.modo === modo;
+        b.style.display = modoDisponivel(b.dataset.modo, n) ? "" : "none";
+        b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      // Equipes: 4 jogadores = 2×2; 6 jogadores = 3×3 ou 2×2×2
+      ov.querySelector("#extraEquipes").style.display = modo === "equipes" ? "" : "none";
+      const formatos = n === 6 ? [[3, "3 × 3"], [2, "2 × 2 × 2"]] : [[2, "2 × 2"]];
+      ov.querySelector("#formatos").innerHTML = formatos.map(function (f) {
+        return '<button class="formatoOpcao' + (f[0] === tamEquipe ? " sel" : "") + '" data-tam="' + f[0] + '">' + f[1] + "</button>";
+      }).join("");
+      ov.querySelectorAll(".formatoOpcao").forEach(function (b) {
+        b.addEventListener("click", function () { tamEquipe = Number(b.dataset.tam); atualizar(); });
+      });
+      ov.querySelector("#extraGrande").style.display = modo === "grande" ? "" : "none";
+      ov.querySelectorAll(".ladoOpcao").forEach(function (b) {
+        const on = b.dataset.lado === lado;
         b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on ? "true" : "false");
       });
     }
     ov.querySelectorAll(".modoOpcao").forEach(function (b) {
-      b.addEventListener("click", function () { modo = b.dataset.modo; marcarModo(); });
+      b.addEventListener("click", function () { modo = b.dataset.modo; atualizar(); });
     });
-    marcarModo();
-    let adv = 3;
-    const q = ov.querySelector("#advQty");
-    ov.querySelector("#advMinus").addEventListener("click", function () { adv = Math.max(1, adv - 1); q.textContent = adv; });
-    ov.querySelector("#advPlus").addEventListener("click", function () { adv = Math.min(5, adv + 1); q.textContent = adv; });
-    ov.querySelector("#startBtn").addEventListener("click", function () { novoJogo(adv, modo); });
+    ov.querySelectorAll(".ladoOpcao").forEach(function (b) {
+      b.addEventListener("click", function () { lado = b.dataset.lado; atualizar(); });
+    });
+    ov.querySelector("#advMinus").addEventListener("click", function () { adv = Math.max(1, adv - 1); atualizar(); });
+    ov.querySelector("#advPlus").addEventListener("click", function () { adv = Math.min(5, adv + 1); atualizar(); });
+    ov.querySelector("#startBtn").addEventListener("click", function () {
+      novoJogo(adv, modo, { tamanhoEquipe: tamEquipe, lado: lado });
+    });
+    atualizar();
   }
 
   // A vitória pode acontecer no meio do turno (modo Clássico): o render
@@ -747,25 +839,81 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     setTimeout(mostrarVitoria, ms);
   }
 
+  const NOME_DESEMPATE = {
+    ultimoGolpe: "quem tomou o último território viking",
+    territorios: "mais territórios",
+    exercitos: "mais exércitos",
+    dados: "nos dados (1 d6 para cada)",
+  };
+
+  // Placar do fim (Partida Rápida e Grande Exército), do maior para o menor.
+  function tabelaPlacar(res) {
+    const linhas = res.placar.slice().sort(function (a, b) {
+      return (b.id === estado.vencedor) - (a.id === estado.vencedor) || b.pontos - a.pontos || b.territorios - a.territorios;
+    });
+    let html = '<table class="placar"><tr><th></th><th>Pontos</th><th>Territórios</th><th>Exércitos</th></tr>';
+    linhas.forEach(function (l) {
+      const j = estado.jogadores[l.id];
+      const vivo = l.vivo !== undefined ? l.vivo : j.vivo;
+      html += '<tr class="' + (l.id === estado.vencedor ? "venc" : "") + (vivo ? "" : " fora") + '"><td><span class="dot" style="background:' + j.cor + '"></span>' +
+        nomeDe(l.id) + (vivo ? "" : " <i>(eliminado)</i>") + "</td><td>" + l.pontos + "</td><td>" + l.territorios + "</td><td>" + l.exercitos + "</td></tr>";
+    });
+    html += "</table>";
+    if (res.decidiu && res.decidiu !== "pontos") {
+      html += '<p class="desempate">Empate em pontos. Desempate: <b>' + NOME_DESEMPATE[res.decidiu] + "</b>";
+      if (res.dados && res.dados.length) {
+        html += " — " + res.dados.map(function (r) {
+          return Object.keys(r).map(function (id) { return nomeDe(Number(id)) + " tirou " + r[id]; }).join(", ");
+        }).join("; depois, ");
+      }
+      html += ".</p>";
+    }
+    return html;
+  }
+
   function mostrarVitoria() {
     const ov = document.getElementById("overlay");
     const v = estado.jogadores[estado.vencedor];
-    const venceu = estado.vencedor === HUMANO;
-    const regs = regioesDominadas(estado, estado.vencedor);
-    const ultimo = jogadoresVivos(estado).length === 1 && !verificarVitoria(estado, estado.vencedor);
-    let motivo, extra = "";
-    if (ultimo) motivo = v.nome + " é o último de pé: todos os outros reinos caíram.";
-    else if (estado.modo === "classico") {
-      const d = descreverObjetivo(estado, estado.vencedor);
-      motivo = d.reserva
-        ? v.nome + " cumpriu o objetivo reserva <b>Bretwalda</b> (" + d.texto.replace(/\.$/, "").toLowerCase() + ")."
-        : v.nome + " cumpriu o objetivo <b>" + d.nome + "</b>: " + d.texto;
-    } else {
-      motivo = v.nome + " domina " + regs.length + " regiões inteiras.";
-      extra = '<div id="winRegions">' + Object.keys(REGIOES).map(function (r) {
+    const nomeV = nomeDe(estado.vencedor);
+    const res = estado.resultado || { motivo: "regioes" };
+    const equipes = estado.modo === "equipes";
+    const eqV = equipes ? v.equipe : null;
+    const venceu = estado.vencedor === HUMANO || (equipes && estado.jogadores[HUMANO].equipe === eqV);
+    const membros = equipes ? membrosDaEquipe(estado, eqV).map(function (id) { return estado.jogadores[id].nome; }).join(" e ") : "";
+    const chipsRegioes = function (regs) {
+      return '<div id="winRegions">' + Object.keys(REGIOES).map(function (r) {
         const tem = regs.indexOf(r) !== -1;
         return '<span class="chip" style="' + (tem ? "" : "opacity:.35") + '">' + r + "</span>";
       }).join("") + "</div>";
+    };
+    let motivo, extra = "";
+    if (res.motivo === "ultimo") {
+      motivo = equipes
+        ? "A equipe " + NOMES_EQUIPE[eqV] + " (" + membros + ") é a última de pé."
+        : nomeV + " é o último de pé: todos os outros reinos caíram.";
+    } else if (res.motivo === "objetivo") {
+      const d = descreverObjetivo(estado, estado.vencedor);
+      motivo = d.reserva
+        ? nomeV + " cumpriu o objetivo reserva <b>Bretwalda</b> (" + d.texto.replace(/\.$/, "").toLowerCase() + ")."
+        : nomeV + " cumpriu o objetivo <b>" + d.nome + "</b>: " + d.texto;
+    } else if (res.motivo === "rapida") {
+      motivo = "Fim das " + RODADAS_RAPIDA + " rodadas. " + nomeV + " fez mais pontos.";
+      extra = tabelaPlacar(res);
+    } else if (res.motivo === "vikings") {
+      motivo = "Os vikings dominam " + META_VIKINGS.slice(0, -1).join(", ") + " e " + META_VIKINGS[META_VIKINGS.length - 1] + ".";
+      extra = chipsRegioes(regioesDominadas(estado, estado.vencedor));
+    } else if (res.motivo === "reinos") {
+      const p = res.placar.filter(function (l) { return l.id === estado.vencedor; })[0];
+      motivo = "Os vikings foram expulsos! " + nomeV + " derrotou mais exércitos vikings (" + p.pontos + " pontos).";
+      extra = tabelaPlacar(res);
+    } else if (res.motivo === "equipeRegioes") {
+      const regs = regioesDaEquipe(estado, eqV);
+      motivo = "A equipe " + NOMES_EQUIPE[eqV] + " (" + membros + ") domina " + regs.length + " regiões inteiras.";
+      extra = chipsRegioes(regs);
+    } else {
+      const regs = regioesDominadas(estado, estado.vencedor);
+      motivo = nomeV + " domina " + regs.length + " regiões inteiras.";
+      extra = chipsRegioes(regs);
     }
     if (estado.modo === "classico") {
       // no fim, todos os objetivos são revelados
@@ -775,10 +923,14 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
           d.original + "</span></div>";
       }).join("") + "</div>";
     }
+    const titulo = venceu ? "Vitória!" : equipes ? "Equipe " + NOMES_EQUIPE[eqV] + " venceu" : nomeV + " venceu";
+    const abertura = venceu
+      ? (equipes ? "A ilha é da sua equipe, comandante. " : "A ilha é sua, comandante. ")
+      : (estado.jogadores[HUMANO].vivo ? "Não foi desta vez. " : "Seu reino caiu. ");
     ov.innerHTML =
-      '<div class="modal">' +
-        "<h2>" + (venceu ? "Vitória!" : v.nome + " venceu") + "</h2>" +
-        '<p class="lead">' + (venceu ? "A ilha é sua, comandante. " : "Seu reino caiu. ") + motivo + "</p>" +
+      '<div class="modal modalVitoria">' +
+        "<h2>" + titulo + "</h2>" +
+        '<p class="lead">' + abertura + motivo + "</p>" +
         extra +
         '<button class="primary" id="againBtn" style="width:100%">Jogar de novo</button>' +
       "</div>";
@@ -786,10 +938,18 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     ov.querySelector("#againBtn").addEventListener("click", mostrarInicio);
   }
 
-  function novoJogo(nBots, modo) {
-    const jogadores = [{ nome: "Você", tipo: "humano" }];
+  // nBots = adversários; opcoes = { tamanhoEquipe, lado } (Equipes / Grande Exército)
+  function novoJogo(nBots, modo, opcoes) {
+    opcoes = opcoes || {};
+    let jogadores = [{ nome: "Você", tipo: "humano" }];
     for (let i = 1; i <= nBots; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
-    estado = criarPartida(jogadores, { modo: modo });
+    if (modo === "grande") {
+      jogadores = REINOS_GRANDE.map(function (r) {
+        return r === opcoes.lado ? { nome: "Você", tipo: "humano" } : { nome: r, tipo: "bot" };
+      });
+    }
+    estado = criarPartida(jogadores, { modo: modo, tamanhoEquipe: opcoes.tamanhoEquipe });
+    HUMANO = Math.max(0, estado.jogadores.findIndex(function (j) { return j.tipo === "humano"; }));
     selecao = null; destinoSel = null; animando = false; escolhendoConquista = false;
     vitoriaAgendada = false; objetivoOculto = false;
     document.getElementById("overlay").classList.remove("on");

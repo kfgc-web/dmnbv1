@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026.
+Última atualização: 25/09/2026 (modos novos).
 
 ---
 
@@ -21,9 +21,9 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Protocolo:** esclarecer → confirmar → **"pode ir"** → agir. Nada de mudar arquivos do jogo antes do OK explícito. Protótipos e maquetes para Kauã avaliar (fora do repositório) podem ser feitos antes.
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
 - **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` (evita o navegador usar arquivo velho guardado).
-- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores; confere 66 cartas a cada turno e, no Clássico, objetivos distintos e vencedor que cumpriu o objetivo). Precisa terminar em "tudo certo, zero falhas".
+- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno e a vitória certa de cada modo). Precisa terminar em "tudo certo, zero falhas".
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
-- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots e o layout do celular (cabeçalho, metade da tela, rolagem única). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
+- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar) e o layout do celular (cabeçalho, metade da tela, rolagem única). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
 
 ## 3. Regras do jogo
 
@@ -33,14 +33,31 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Conquista:** entram **no máximo 3 exércitos** (sempre fica 1 na origem). O jogador escolhe **1, 2 ou 3** numa janela logo após a conquista (limite decidido por Kauã: mover tudo gerava conquistas em cadeia). Bots levam automaticamente o nº de dados que rolaram, também limitado a 3. (Motor: `MAX_MOVER_CONQUISTA`, `atacar(..., { escolher: true })` + `moverNaConquista(estado, total)`.)
 - **Reforço-base** = `max(3, round(territórios / 3))` + bônus regionais + trocas de cartas.
 - **Turno:** reforço → ataque → remanejamento.
-- **Vitória:** depende do **modo** (abaixo). Em todos, sobrar um único jogador vivo também é vitória.
-- **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots. Distribuição inicial: rodízio embaralhado, 1 exército por território.
+- **Vitória:** depende do **modo** (abaixo). Em todos, sobrar um único jogador vivo (no Equipes, uma única equipe) também é vitória.
+- **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots; Grande Exército sempre 9. Distribuição inicial: rodízio embaralhado, 1 exército por território (Grande Exército: começo fixo, abaixo). Por enquanto a tela tem **um humano** ("Você") e o resto bots.
 
 ### Modos de jogo (escolhidos na tela de início; padrão: Clássico)
 - **Clássico:** cada jogador recebe um **objetivo secreto** diferente; vence quem cumprir o seu **na hora, durante o próprio turno** (checado após reforço, troca, ataque, conquista e remanejamento). O objetivo aparece no painel (botão Esconder/Mostrar) e todos são revelados na vitória.
 - **Domínio:** vence quem tiver **5 das 8 regiões inteiras** (checado ao fim do turno).
 - **Conquista Total:** só vence o **último de pé**.
-- Ideias para depois (aprovadas como sugestão, ainda não feitas): **Grande Exército** (assimétrico viking × reinos), **Partida Rápida** (limite de rodadas, pontos), **Duplas** (2×2 / 3×3).
+- **Partida Rápida:** acaba após **15 rodadas** (15 turnos por jogador). Pontos: 1 por território; território de região inteira vale 3. Desempate: mais exércitos; se ainda empatar, 1 d6 para cada. Último de pé também vence. A fase mostra "Rodada X de 15" e o painel, os pontos.
+- **Grande Exército:**
+  - **9 assentos fixos** (humano ou bot): Vikings + os 8 reinos (cada reino = uma região). Cores por lado em `COR_REINO` (3 novas: preto, branco, rosa). Na tela de início o jogador escolhe **seu lado** (os outros 8 são bots, enquanto não houver online).
+  - **Ordem fixa:** Vikings → East Engle → Northhymbre → Mierce → Westseaxe → Cymru → Dál Riata → Alba → Ériu.
+  - **Início:** Vikings em Eoforwic, Streoneshalh, Mameceaster, Northfolc, Suthfolc com **7** em cada. East Engle: o que sobra (Grantebrycge, Medeshamstede) com **3** em cada. Northhymbre: os outros 6 com **2** em cada. Demais reinos: a região inteira com **1** em cada.
+  - **Reforço (todo turno):** reinos = `max(3, floor(territórios / 2))` + bônus de regiões. Vikings = o mesmo + **3 do mar** (`reforco.mar`), que só vão para território viking no litoral (sem litoral, sem os 3); na sequência guiada vêm depois das regiões e antes do geral. Cartas funcionam normal para todos.
+  - **Vitória viking:** Northhymbre + Mierce + East Engle + Westseaxe inteiras (na hora).
+  - **Vitória dos reinos:** vikings eliminados → vence o reino **vivo** com mais **pontos** (1 ponto por exército viking derrotado, no ataque e na defesa). Reino eliminado fica fora. Desempate: quem destruiu o último território viking → mais territórios → mais exércitos → cada empatado rola 1 d6, maior vence (rola de novo se empatar).
+  - Reinos podem se atacar; **reinos-bots só atacam os Vikings** (`botAlvos` em `bots.js`, pedido de não forçar a traição). Sem limite de tempo. Lista de jogadores mostra os pontos; os dados mostram "+N pontos"; o fim mostra o placar e o desempate.
+  - Stress (só bots): os reinos vencem ~95% (Vikings ~5%). Com humanos brigando entre si, a chance viking sobe.
+- **Equipes:**
+  - Formatos: 4 jogadores = 2×2; 6 = 3×3 ou 2×2×2. Com outro nº de jogadores o modo não aparece.
+  - Equipes **sorteadas** pelo jogo (o motor embaralha os assentos; assento i = equipe i % nº de equipes); vezes **alternadas** entre equipes, sequência fixa na partida.
+  - **Sem ataque ao parceiro** e **sem remanejar** para território do parceiro. Cartas individuais, sem troca entre parceiros.
+  - **Bônus de região da equipe:** região toda nas mãos da equipe conta como fechada; o bônus vai inteiro para o parceiro com mais territórios nela (empate: mais exércitos lá; depois, quem joga antes).
+  - **Vitória:** equipe com **5 das 8 regiões** fechadas (somando parceiros; checado no fim do turno, como no Domínio) ou que eliminar todos os adversários.
+  - Parceiro eliminado: o resto da equipe segue; cartas do eliminado vão para quem o eliminou. Marquinha da equipe (letra A/B/C) nas peças e na lista de jogadores.
+- A tela de início só mostra os modos que cabem no nº de jogadores (`modoDisponivel`).
 
 ### Objetivos do Clássico (17, aprovados por Kauã)
 1. Alto-Rei da Irlanda — Ériu + Dál Riata
@@ -95,11 +112,11 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
 
-**Ações:** `criarPartida(jogadores, { modo })` · `calcularReforcos` → `{ base, porRegiao, ordem, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma).
+**Ações:** `criarPartida(jogadores, { modo, tamanhoEquipe })` · `calcularReforcos` → `{ base, porRegiao, ordem, mar, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma).
 
-**Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`, `objetivoCumprido`, `objetivoEfetivo`, `descreverObjetivo`. Dados dos modos/objetivos: `MODOS`, `OBJETIVOS`, `OBJETIVO_RESERVA`.
+**Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`, `objetivoCumprido`, `objetivoEfetivo`, `descreverObjetivo`, `descreverMeta`, `modoDisponivel`, `saoAliados`, `membrosDaEquipe`, `regioesDaEquipe`, `pontosRapida`, `ehViking`. Dados dos modos/objetivos: `MODOS`, `OBJETIVOS`, `OBJETIVO_RESERVA`, `RODADAS_RAPIDA`, `REINOS_GRANDE`, `COR_REINO`, `META_VIKINGS`, `NOMES_EQUIPE`. Fins de partida: `finalizarRapida`, `finalizarGrande` (desempate em `desempatar`).
 
-**Estado** (dado simples, pronto para salvar/enviar): `modo`, `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico e `eliminadoPor`), `vez`, `turno`, `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `ultimoEvento`, `log`.
+**Estado** (dado simples, pronto para salvar/enviar): `modo`, `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico, `reino` e `pontos` no Grande Exército, `equipe` no Equipes, e `eliminadoPor`), `vez`, `turno` (rodada), `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `resultado` (como acabou: `motivo` = objetivo/regioes/ultimo/rapida/vikings/reinos/equipeRegioes, + placar e desempate), `ultimoGolpe`, `ultimoEvento`, `log`. A ordem dos assentos é a ordem de jogada.
 
 ### Tela — pontos-chave
 - Mapa estilo WAR: cada território é uma área pintada com a **cor da sua região**; divisa fina entre territórios, grossa entre regiões; peças (discos) com a **cor do dono** e o nº de exércitos. Tocar no território ou na peça.
@@ -108,9 +125,10 @@ Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" 
 - **Zoom** pelos botões + / − (mantém o centro).
 - **Botão "Painel"** no cabeçalho recolhe o painel (fica só a vez, a fase e os botões) — pensado para o celular; a escolha fica guardada no navegador.
 - **Celular (retrato):** painel aberto ocupa **metade da tela** e rola como **uma página só** (sem rolagens separadas por seção); o mapa fica na outra metade.
-- Painel mostra o **modo** e, no Clássico, o **objetivo** do jogador.
+- Painel mostra o **modo** e a meta do jogador: objetivo (Clássico), lado (Grande Exército), equipe e regiões da equipe (Equipes), pontos (Partida Rápida).
+- `HUMANO` (assento do jogador) é definido em `novoJogo`: no Grande Exército e no Equipes não é o assento 0.
 - Bots jogam com pausa (~780 ms); territórios que trocam de dono piscam.
-- Cores dos assentos: `#c0392b`, `#2c6fbb`, `#27ae60`, `#e0a200`, `#8e44ad`, `#16a085`. Acento pergaminho/osso `#cbb892`; títulos em **Cinzel**.
+- Cores dos assentos: `#c0392b`, `#2c6fbb`, `#27ae60`, `#e0a200`, `#8e44ad`, `#16a085` (+ `#1e1e1e`, `#ecf0f1`, `#e84393` no Grande Exército). Acento pergaminho/osso `#cbb892`; títulos em **Cinzel**.
 
 ## 5. O mapa
 
@@ -151,26 +169,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 7. **Escolha de quantos exércitos entram na conquista** — depois limitada a 1, 2 ou 3.
 8. **Modos Clássico (17 objetivos), Domínio e Conquista Total**; botão de recolher o painel; cabeçalho ajustado ao celular.
 9. Playtest no celular aprovado; Rixa de Sangue só sorteada contra cores presentes.
+10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos.
 
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest de Kauã no celular~~ — ok. Ajuste que saiu dele: Rixa de Sangue só contra cores presentes.
-2. **Outros modos** — em definição com Kauã; implantar **todos de uma vez** quando as regras estiverem fechadas.
-   - **Partida Rápida (definido):** acaba após **15 rodadas** (15 turnos por jogador). Pontos: 1 por território; território de região inteira vale 3. Desempate: mais exércitos. Último de pé também vence.
-   - **Grande Exército (definido):**
-     - **9 assentos fixos** (humano ou bot): Vikings + os 8 reinos (cada reino = uma região). Criar **3 cores novas**.
-     - **Ordem fixa:** Vikings → East Engle → Northhymbre → Mierce → Westseaxe → Cymru → Dál Riata → Alba → Ériu.
-     - **Início:** Vikings em Eoforwic, Streoneshalh, Mameceaster, Northfolc, Suthfolc com **7** em cada. East Engle: o que sobra (Grantebrycge, Medeshamstede) com **3** em cada. Northhymbre: os outros 6 com **2** em cada. Demais reinos: a região inteira com **1** em cada.
-     - **Reforço (todo turno):** reinos = `max(3, floor(territórios / 2))` + bônus de regiões. Vikings = o mesmo + **3 do mar**, que só vão para território viking no litoral (sem litoral, sem os 3). Cartas funcionam normal para todos.
-     - **Vitória viking:** Northhymbre + Mierce + East Engle + Westseaxe inteiras (na hora).
-     - **Vitória dos reinos:** vikings eliminados → vence o reino **vivo** com mais **pontos** (1 ponto por exército viking derrotado, no ataque e na defesa). Reino eliminado fica fora. Desempate: quem destruiu o último território viking → mais territórios → mais exércitos → cada empatado rola 1 d6, maior vence (rola de novo se empatar).
-     - Reinos podem se atacar; bots quase não atacam aliados (sem forçar). Sem limite de tempo. Painel mostra o placar de pontos.
-   - **Equipes (definido):**
-     - Formatos: 4 jogadores = 2×2; 6 = 3×3 ou 2×2×2. Com outro nº de jogadores o modo não aparece.
-     - Equipes **sorteadas** pelo jogo; vezes **alternadas** entre equipes, sequência sorteada e fixa na partida.
-     - **Sem ataque ao parceiro** e **sem remanejar** para território do parceiro. Cartas individuais, sem troca entre parceiros.
-     - **Bônus de região da equipe:** região toda nas mãos da equipe conta como fechada; o bônus vai inteiro para o parceiro com mais territórios nela (empate: mais exércitos lá; depois, quem joga antes).
-     - **Vitória:** equipe com **5 das 8 regiões** fechadas (somando parceiros; checado no fim do turno, como no Domínio) ou que eliminar todos os adversários.
-     - Parceiro eliminado: o resto da equipe segue; cartas do eliminado vão para quem o eliminou. Marquinha da equipe nas peças.
+2. **Playtest dos modos novos** (Partida Rápida, Grande Exército, Equipes) — e ajustes que saírem dele. Nos testes só de bots, os Vikings vencem pouco no Grande Exército (ver §3); Kauã decide se mexe no equilíbrio.
 3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
 4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
