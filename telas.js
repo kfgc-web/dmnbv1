@@ -1,79 +1,19 @@
 /* ============================================================
-   DOMINATION: BRITÂNIA — telas.js (interface)
-   Carregar DEPOIS de mapa.js + motor.js + bots.js.
-   Contém: POSICOES (coordenadas conferidas) + a IIFE da tela.
+   DOMINATION: BRITANNIA — telas.js (interface)
+   Carregar DEPOIS de mapa.js + motor.js + bots.js + desenho.js.
+   Contém: POSICOES (lidas de desenho.js) + a IIFE da tela.
    ============================================================ */
-const POSICOES = {
-  "Cornualha": [722,1164],
-  "Devon": [722,1092],
-  "Somerset": [727,996],
-  "Gloucester": [786,989],
-  "Hampshire": [796,1037],
-  "Sussex": [867,1044],
-  "Kent": [912,1018],
-  "Essex": [919,959],
-  "London": [863,986],
-  "Norfolk": [903,863],
-  "Suffolk": [940,907],
-  "Cambridge": [886,897],
-  "Peterborough": [823,838],
-  "Northampton": [821,908],
-  "Birmingham": [740,922],
-  "Hereford": [652,902],
-  "Chester": [617,799],
-  "Derby": [697,846],
-  "South York": [679,787],
-  "Nottingham": [738,786],
-  "Lincoln": [779,763],
-  "Leicester": [768,860],
-  "Gwynedd": [476,806],
-  "Powys": [553,886],
-  "Deheubarth": [539,942],
-  "Gwent": [584,929],
-  "Blackpool": [632,701],
-  "Manchester": [670,722],
-  "East York": [714,701],
-  "North York": [642,609],
-  "Newcastle": [623,490],
-  "Alston": [615,525],
-  "Edimburg": [604,389],
-  "Lancashire": [576,522],
-  "Hawick": [575,455],
-  "Wigtown": [495,474],
-  "Glascow": [555,372],
-  "Derry": [291,548],
-  "Omagh": [283,594],
-  "Belfast": [363,546],
-  "Ilha de Mann": [334,488],
-  "Dundee": [627,315],
-  "Stirling": [593,302],
-  "Kilchomann": [570,267],
-  "Glencoe": [581,184],
-  "Inverness": [597,215],
-  "Aberdeen": [624,259],
-  "Gairloch": [600,126],
-  "Stornoway": [629,66],
-  "Kirkwall": [587,60],
-  "Letterkenny": [240,573],
-  "Sligo": [235,629],
-  "Boyle": [268,680],
-  "Dundalk": [324,651],
-  "Dublin": [317,752],
-  "Portlaoise": [202,798],
-  "Kilkenny": [142,852],
-  "Waterford": [89,873],
-  "Cork": [60,849],
-  "Limerick": [119,830],
-  "Killarney": [85,814],
-  "Ennis": [151,791],
-  "Athlone": [228,745],
-  "Castlebar": [217,685],
-};
-const VIEW_W=1000, VIEW_H=1300;
+// Onde fica a peça de cada território — calculado pelo gerador do mapa
+// (ferramentas/gerar-mapa.js) e gravado em desenho.js.
+const POSICOES = {};
+Object.keys(DESENHO.territorios).forEach(function (t) {
+  POSICOES[t] = [DESENHO.territorios[t].x, DESENHO.territorios[t].y];
+});
+const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
 /* ============================================================
-   WAR BRITÂNICO — TELAS (interface) — v1 tabuleiro esquemático
-   Roda sobre mapa.js + motor.js + bots.js (já carregados acima)
-   e sobre POSICOES (coordenadas verificadas).
+   WAR BRITÂNICO — TELAS (interface) — v2 mapa desenhado (estilo WAR)
+   Roda sobre mapa.js + motor.js + bots.js + desenho.js (já carregados)
+   e sobre POSICOES (centro de cada território no desenho).
    ============================================================ */
 (function () {
   "use strict";
@@ -81,7 +21,7 @@ const VIEW_W=1000, VIEW_H=1300;
   const SVGNS = "http://www.w3.org/2000/svg";
   const HUMANO = 0;             // assento 0 = jogador humano ("Você")
   const DELAY_BOT = 780;        // pausa entre turnos de bots (ms), p/ dar de ver
-  const R_DISC = 17;            // raio do disco do território
+  const R_DISC = 12;            // raio da peça (disco) do território
 
   let estado = null;
   let selecao = null;           // território de origem selecionado
@@ -125,71 +65,78 @@ const VIEW_W=1000, VIEW_H=1300;
     return lum > 150 ? "#15110a" : "#ffffff";
   }
 
-  // arestas únicas a partir do mapa
-  function arestas() {
-    const out = [], seen = {};
-    Object.keys(TERRITORIOS).forEach(function (t) {
-      vizinhosDe(t).forEach(function (v) {
-        const key = [t, v].sort().join("|");
-        if (!seen[key]) { seen[key] = 1; out.push([t, v]); }
-      });
-    });
-    return out;
-  }
-
-  // convex hull (Andrew) + expansão a partir do centróide
-  function hull(points) {
-    const pts = points.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
-    if (pts.length < 3) return pts;
-    const cross = function (o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); };
-    const lower = [];
-    for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
-    const upper = [];
-    for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
-    lower.pop(); upper.pop();
-    return lower.concat(upper);
-  }
-  function expandir(poly, pad) {
-    const cx = poly.reduce(function (s, p) { return s + p[0]; }, 0) / poly.length;
-    const cy = poly.reduce(function (s, p) { return s + p[1]; }, 0) / poly.length;
-    return poly.map(function (p) {
-      const dx = p[0] - cx, dy = p[1] - cy, d = Math.hypot(dx, dy) || 1;
-      return [p[0] + dx / d * pad, p[1] + dy / d * pad];
-    });
-  }
+  // Cor de cada região no tabuleiro (como os continentes do WAR).
+  const COR_REGIAO = {
+    "Ériu": "#46703f",
+    "Dál Riata": "#2f6f6a",
+    "Alba": "#5b5886",
+    "Northhymbre": "#355f86",
+    "Mierce": "#8a4f34",
+    "East Engle": "#8a7a2e",
+    "Westseaxe": "#9a6a2c",
+    "Cymru": "#8a3d52",
+  };
+  const elTerr = {};            // polígono de cada território
 
   // -------- construção do tabuleiro (uma vez) --------
   function construir() {
     const svg = document.getElementById("board");
     svg.setAttribute("viewBox", "0 0 " + VIEW_W + " " + VIEW_H);
     svg.innerHTML = "";
-    const gHull = E("g"), gEdge = E("g"), gNode = E("g");
-    svg.appendChild(gHull); svg.appendChild(gEdge); svg.appendChild(gNode);
 
-    // hulls das regiões + rótulo
+    // recorte pelo litoral: tudo que é "terra" fica dentro dele
+    const defs = E("defs");
+    const clip = E("clipPath", { id: "recorteTerra" });
+    clip.appendChild(E("path", { d: DESENHO.terra }));
+    defs.appendChild(clip);
+    svg.appendChild(defs);
+
+    // mar
+    svg.appendChild(E("rect", { class: "mar", x: 0, y: 0, width: VIEW_W, height: VIEW_H }));
+    // sombra da costa (dá relevo às ilhas)
+    svg.appendChild(E("path", { class: "costaSombra", d: DESENHO.terra }));
+
+    // territórios (pintados pela região) + divisas, tudo recortado pelo litoral
+    const gTerra = E("g", { "clip-path": "url(#recorteTerra)" });
+    gTerra.appendChild(E("path", { class: "chao", d: DESENHO.terra }));
+    Object.keys(DESENHO.territorios).forEach(function (t) {
+      const pl = E("path", { class: "territorio", d: DESENHO.territorios[t].d, fill: COR_REGIAO[regiaoDe(t)] });
+      pl.addEventListener("click", function () { onClick(t); });
+      gTerra.appendChild(pl);
+      elTerr[t] = pl;
+    });
+    if (DESENHO.lagos) gTerra.appendChild(E("path", { class: "lago", d: DESENHO.lagos }));
+    gTerra.appendChild(E("path", { class: "fronteira", d: DESENHO.fronteiras }));
+    gTerra.appendChild(E("path", { class: "divisa", d: DESENHO.divisas }));
+    svg.appendChild(gTerra);
+    svg.appendChild(E("path", { class: "costa", d: DESENHO.terra }));
+
+    // rotas marítimas (tracejadas, ligando as ilhas)
+    const gRota = E("g");
+    DESENHO.rotas.forEach(function (r) {
+      const dx = r[4] - r[2], dy = r[5] - r[3], d = Math.hypot(dx, dy) || 1, ext = 10;
+      gRota.appendChild(E("line", {
+        class: "rota",
+        x1: r[2] - dx / d * ext, y1: r[3] - dy / d * ext,
+        x2: r[4] + dx / d * ext, y2: r[5] + dy / d * ext,
+      }));
+    });
+    svg.appendChild(gRota);
+
+    // nomes das regiões (no mar) + bônus
     Object.keys(REGIOES).forEach(function (r) {
-      const pts = territoriosDaRegiao(r).map(function (t) { return POSICOES[t]; });
-      const poly = expandir(hull(pts), 30);
-      if (poly.length >= 3) {
-        const pl = E("polygon", { points: poly.map(function (p) { return p[0] + "," + p[1]; }).join(" "), class: "hull" });
-        gHull.appendChild(pl);
-      }
-      const cx = pts.reduce(function (s, p) { return s + p[0]; }, 0) / pts.length;
-      const ys = pts.map(function (p) { return p[1]; });
-      const topY = Math.min.apply(null, ys);
-      const lab = E("text", { x: cx, y: topY - 30, class: "hullLabel" });
-      lab.textContent = r + "  +" + bonusDaRegiao(r);
-      gHull.appendChild(lab);
+      const p = DESENHO.rotulosRegiao[r];
+      if (!p) return;
+      const lab = E("text", { x: p[0], y: p[1], class: "rotuloRegiao" });
+      lab.textContent = r;
+      const bon = E("tspan", { class: "bonus", x: p[0], dy: 19 });
+      bon.textContent = "+" + bonusDaRegiao(r) + " por turno";
+      lab.appendChild(bon);
+      svg.appendChild(lab);
     });
 
-    // arestas (terra/mar)
-    arestas().forEach(function (e) {
-      const a = POSICOES[e[0]], b = POSICOES[e[1]];
-      const cls = ehLigacaoMaritima(e[0], e[1]) ? "edge sea" : "edge";
-      gEdge.appendChild(E("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: cls }));
-    });
-
-    // nós
+    // peças (exércitos) + nome do território
+    const gNode = E("g");
     Object.keys(TERRITORIOS).forEach(function (t) {
       const p = POSICOES[t];
       const g = E("g", { class: "node" });
@@ -197,13 +144,54 @@ const VIEW_W=1000, VIEW_H=1300;
       const ring = E("circle", { class: "ring", cx: p[0], cy: p[1], r: R_DISC + 5 });
       const disc = E("circle", { class: "disc", cx: p[0], cy: p[1], r: R_DISC });
       const army = E("text", { class: "army", x: p[0], y: p[1] });
-      const terr = E("text", { class: "terr", x: p[0], y: p[1] + R_DISC + 11 });
+      const terr = E("text", { class: "terr", x: p[0], y: p[1] + R_DISC + 10 });
       terr.textContent = t;
       g.appendChild(ring); g.appendChild(disc); g.appendChild(army); g.appendChild(terr);
       g.addEventListener("click", function () { onClick(t); });
       gNode.appendChild(g);
       elDisc[t] = disc; elArmy[t] = army; elRing[t] = ring;
     });
+    svg.appendChild(gNode);
+    afastarNomes();
+  }
+
+  // Nome do território vai embaixo da peça; se bater em outro nome ou
+  // noutra peça, sobe para cima dela.
+  function afastarNomes() {
+    const caixas = [];
+    const F = 5; // folga entre caixas
+    const bate = function (a, b) { return a.x - F < b.x + b.w && b.x - F < a.x + a.w && a.y - F < b.y + b.h && b.y - F < a.y + a.h; };
+    Object.keys(POSICOES).forEach(function (t) {
+      const p = POSICOES[t];
+      caixas.push({ x: p[0] - R_DISC, y: p[1] - R_DISC, w: 2 * R_DISC, h: 2 * R_DISC, dono: t });
+    });
+    Object.keys(POSICOES).sort(function (a, b) { return POSICOES[a][1] - POSICOES[b][1]; }).forEach(function (t) {
+      const el = elDisc[t].parentNode.querySelector(".terr");
+      let bb;
+      try { bb = el.getBBox(); } catch (e) { return; }
+      if (!bb.width) return;
+      const livre = function (c) { return !caixas.some(function (o) { return o.dono !== t && bate(c, o); }); };
+      // tenta: embaixo, em cima, e as duas posições um pouco para os lados
+      const yCima = POSICOES[t][1] - R_DISC - 6, dyCima = yCima - Number(el.getAttribute("y"));
+      const opcoes = [[0, 0], [0, dyCima], [-12, 0], [12, 0], [-12, dyCima], [12, dyCima]];
+      let c = null;
+      for (let i = 0; i < opcoes.length && !c; i++) {
+        const cand = { x: bb.x + opcoes[i][0], y: bb.y + opcoes[i][1], w: bb.width, h: bb.height, dono: t };
+        if (livre(cand)) {
+          c = cand;
+          el.setAttribute("x", POSICOES[t][0] + opcoes[i][0]);
+          el.setAttribute("y", Number(el.getAttribute("y")) + opcoes[i][1]);
+        }
+      }
+      if (!c) c = { x: bb.x, y: bb.y, w: bb.width, h: bb.height, dono: t };
+      caixas.push(c);
+    });
+  }
+
+  // destaque de um território: anel na peça + brilho no desenho
+  function marcar(t, estadoVisual) {
+    elRing[t].setAttribute("class", estadoVisual ? "ring " + estadoVisual : "ring");
+    elTerr[t].setAttribute("class", estadoVisual ? "territorio " + estadoVisual : "territorio");
   }
 
   // -------- render (atualiza cores, números, destaques, painel) --------
@@ -216,7 +204,7 @@ const VIEW_W=1000, VIEW_H=1300;
       elDisc[t].setAttribute("fill", cor);
       elArmy[t].setAttribute("fill", corTexto(cor));
       elArmy[t].textContent = texto(t).exercitos;
-      elRing[t].setAttribute("class", "ring"); // limpa
+      marcar(t, ""); // limpa
     });
     // destaque do reforço (Modo B): acende os territórios onde o bolsão ativo
     // pode entrar — só a região da vez, ou o mapa todo no reforço geral.
@@ -226,18 +214,18 @@ const VIEW_W=1000, VIEW_H=1300;
         Object.keys(TERRITORIOS).forEach(function (t) {
           if (estado.territorios[t].dono !== HUMANO) return;
           if (ativo.modo === "geral" || regiaoDe(t) === ativo.regiao)
-            elRing[t].setAttribute("class", "ring dest");
+            marcar(t, "dest");
         });
       }
     }
     // destaques de seleção (ataque / remanejamento)
     if (selecao) {
-      elRing[selecao].setAttribute("class", "ring origin");
+      marcar(selecao, "origin");
       if (estado.fase === "ataque") {
-        inimigosVizinhos(estado, selecao).forEach(function (v) { elRing[v].setAttribute("class", "ring target"); });
+        inimigosVizinhos(estado, selecao).forEach(function (v) { marcar(v, "target"); });
       } else if (estado.fase === "remanejamento") {
         vizinhosDe(selecao).forEach(function (v) {
-          if (estado.territorios[v].dono === HUMANO) elRing[v].setAttribute("class", "ring dest");
+          if (estado.territorios[v].dono === HUMANO) marcar(v, "dest");
         });
       }
     }
