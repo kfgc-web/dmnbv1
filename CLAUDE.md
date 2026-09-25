@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (online entregue; falta Kauã publicar as regras do banco e testar com amigos).
+Última atualização: 25/09/2026 (online testado por Kauã; README, LICENSE, DESIGN.md e aviso de ©).
 
 ---
 
@@ -22,6 +22,8 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
 - **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` **e `VERSAO` em `sw.js` para o mesmo N** (é o que faz o app instalado mostrar "Nova versão disponível"; o teste da tela confere que os dois batem). Arquivo novo do jogo → acrescentar na lista `ARQUIVOS` do `sw.js`.
 - **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno, a vitória certa de cada modo e, a cada 10 partidas, uma "gêmea" com a mesma semente jogada pela lista de jogadas que tem de terminar idêntica). Precisa terminar em "tudo certo, zero falhas". **Toda sorte do motor tem de sair de `sorte(estado)`** (nunca `Math.random` nas regras nem nos bots), senão o online dessincroniza.
+- Ao fim de cada entrega, registrar no DESIGN.md as decisões que o Kauã deu na sessão (transcritas, com data e nº do PR). O DESIGN.md não precisa ser lido no início das sessões.
+- Mensagens de commit e PR dizem a decisão por trás da mudança, não só o que mudou.
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
 - **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar), celular em pé (aviso de girar), celular deitado (mapa à esquerda, painel à direita, rolagem única), tablet em pé e o app (versão do sw.js, manifesto, funciona sem internet, aviso de versão nova e atualização). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
 - **Depois de mexer no online** (`rede.js`, `online.js`, regras do banco, ou nas jogadas do motor): `node ferramentas/teste-online.js` (`--prints` para prints). Sobe o emulador oficial do Firebase com `ferramentas/regras-firebase.json` e joga com vários "aparelhos": sala, convite, cor, modo, regras recusando estranho/trapaça, partida igual em todos a cada jogada, bots, jogador parado (botão), jogadas ao mesmo tempo, quem cai e volta, sair e voltar, Equipes montadas na sala, Grande Exército com reino escolhido. Precisa terminar em "tudo certo". Instalação (uma vez): `npm i --no-save --prefix ferramentas firebase@12.11.0 firebase-tools@15` (precisa de Java). No ambiente do Claude, rodar os testes com `NODE_PATH=$(npm root -g)` (o Playwright é global). O emulador é iniciado sem regras e as regras são publicadas por HTTP (o proxy do ambiente bloqueia o firebase-tools de fazer isso).
@@ -123,6 +125,8 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 | `sw.js` | Service worker: guarda os arquivos (`ARQUIVOS`, com `VERSAO`) para abrir sem internet; versão nova espera o toque no aviso; guarda também as fontes do Google |
 | `manifest.webmanifest` | Dados do app: nome "Domination: Britannia" (curto "Domination"), tela cheia, **deitado**, ícones |
 | `icones/` | `icone-fonte.webp` (arte do escudo, feita por IA a pedido de Kauã) e os PNG gerados por `ferramentas/gerar-icones.js` (192/512, maskable com margem para o círculo do Android, apple-touch, favicon) |
+| `README.md`, `LICENSE`, `DESIGN.md` | Apresentação (PT + EN, prints em `imagens/`); licença proprietária (© Kauã Felipe Gielow Camargo, todos os direitos reservados); registro de design e das decisões de Kauã, com data e fonte |
+| `historico/` | Os dois documentos de 12.7.2026 (época do chat comum), gravados **sem alteração** — nunca editar |
 | `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `gerar-icones.js`, `stress.js` (stress dos bots), `teste-tela.js` (teste no navegador), `teste-online.js` (vários aparelhos contra o emulador do Firebase) e `regras-firebase.json` (regras de segurança do banco — é o que se cola no console do Firebase) |
 
 ### motor.js — API
@@ -138,6 +142,7 @@ Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" 
 - Mapa estilo WAR: cada território é uma área pintada com a **cor da sua região**; divisa fina entre territórios, grossa entre regiões; peças (discos) com a **cor do dono** e o nº de exércitos. Tocar no território ou na peça.
 - Nomes de território que colidem mudam de lugar sozinhos (`afastarNomes`).
 - **Dados** aparecem em cima da batalha e somem em 1,5 s.
+- Rodapé da janela de início: "© 2026 Kauã Felipe Gielow Camargo · Todos os direitos reservados" (o teste da tela confere).
 - **Zoom** pelos botões + / − (mantém o centro).
 - **Botão "Painel"** no cabeçalho recolhe o painel (fica só a vez, a fase e os botões) — pensado para o celular; a escolha fica guardada no navegador.
 - **Celular: só deitado** (decisão de Kauã). Em pé (largura ≤ 600) aparece o aviso **"Gire o celular"** cobrindo tudo. Deitado (altura ≤ 540): cabeçalho baixo, mapa à esquerda (no zoom 1 a ilha inteira cabe na altura), painel de 270 px à direita rolando como **uma página só**; janelas roláveis; respeita o entalhe (`safe-area`).
@@ -196,9 +201,10 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos. Playtest de Kauã aprovado; dados mantidos (4 d8 × 3 d8 — simulação mostrou equilíbrio); 3×3 fica como está (aparece com 5 adversários).
 11. **App no celular (PWA)**: instalável, abre sem internet, avisa versão nova; ícone do escudo; jogo só deitado no celular.
 12. **Online com amigos** (Firebase `domination-britannia`): sala com código e convite, cor escolhida, equipes montadas na sala, reino escolhido no Grande Exército, partida guardada como lista de jogadas com sorte combinada (motor com `sorte(estado)`), bots pelo juiz, quem cai vira bot em 10 s, botão do parado (60 s), volta sozinho ao reabrir o app.
+13. **Autoria:** README (PT + EN, com prints), LICENSE proprietário, aviso de © no início, DESIGN.md com o registro das decisões de Kauã e `historico/` com os documentos de julho. Online testado por Kauã ("aparentemente funciona").
 
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
-2. **Online** — entregue (histórico 12). **Pendente com Kauã:** publicar as regras (`ferramentas/regras-firebase.json` → console do Firebase → Realtime Database → Regras → Publicar) e testar com amigos de verdade (o teste automático usa o emulador; o Firebase de verdade ainda não foi usado). Ideias para depois: revanche na mesma sala, bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
+2. **Online** — entregue (histórico 12) e testado por Kauã. Ideias para depois: revanche na mesma sala, bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
 3. Ideia anotada: **salvar a partida sozinho** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida contra bots; a online já sobrevive).

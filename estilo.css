@@ -258,6 +258,7 @@
   /* ---------- online: entrada, sala e painel ---------- */
   .inicioOnline{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
   .inicioOnline:empty{ display:none; }
+  .inicioCopy{ margin:14px 0 0; text-align:center; font-size:11px; color:var(--muted); opacity:.8; }
   .inicioOnline button{ width:100%; padding:10px 12px; }
   .modal.modalOnline{ max-height:94vh; overflow:auto; }
   .modal.modalOnline .flabel{ display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }

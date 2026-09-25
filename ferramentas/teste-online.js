@@ -163,7 +163,12 @@ async function sincronizar(pags, ms) {
   }
   return false;
 }
-const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: path.join(PASTA_PRINTS, nome + ".png") }); };
+// (esconde a faixa "emulator mode" que o Firebase põe no rodapé durante o teste)
+const print = async function (p, nome) {
+  if (!PRINTS) return;
+  await p.addStyleTag({ content: ".firebase-emulator-warning{display:none !important}" });
+  await p.screenshot({ path: path.join(PASTA_PRINTS, nome + ".png") });
+};
 
 // Joga a vez de quem é o humano deste aparelho: reforço (pela tela), 1 ataque se der, passa.
 async function jogarMinhaVez(p) {
