@@ -54,7 +54,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 9. De Eoforwic a Lundenburg — Northhymbre + Westseaxe
 10. Bretwalda — 36 territórios
 11. Terra Assentada — 27 territórios com 2+ exércitos em cada
-12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Se a cor não estiver na partida, for você mesmo, ou outro jogador eliminá-la antes, vale **36 territórios** (objetivo reserva). A tela explica a troca: no painel e na vitória aparece que a Rixa "virou Bretwalda" e o motivo (ex.: "o jogador verde (Bot 2) foi eliminado por Bot 3").
+12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Se a cor não estiver na partida, for você mesmo, ou outro jogador eliminá-la antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
 - Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
 
 ### Reforço "Modo B" (sequência guiada)
