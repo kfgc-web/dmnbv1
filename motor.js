@@ -16,7 +16,9 @@
    ------------------------------------------------------------
    API PÚBLICA (os "verbos" do jogo):
      criarPartida(jogadores, opcoes)    -> cria a partida pronta (opcoes.modo: veja MODOS;
-                                           opcoes.tamanhoEquipe: 2 ou 3 no modo "equipes")
+                                           opcoes.tamanhoEquipe: 2 ou 3 no modo "equipes";
+                                           opcoes.semente: a sorte da partida (online);
+                                           opcoes.equipesProntas: equipes já montadas na ordem)
      calcularReforcos(estado, id)       -> detalha reforços { base, porRegiao, ordem, total }
      posicionarReforco(estado, t, qtd)  -> põe reforços num território (respeita a restrição de região)
      terminarReforco(estado)            -> fecha reforços, abre ataque
@@ -26,6 +28,8 @@
      remanejar(estado, orig, dest, qtd) -> 1 pulo de remanejamento (vários por turno; trava por exército)
      passarVez(estado)                  -> fecha o turno e chama o próximo
      trocarCartas(estado, indices)      -> troca 3 cartas da mão por exércitos (fase de reforço)
+     aplicarAcao(estado, acao)          -> aplica UMA jogada descrita como dado simples
+                                           (o online guarda a partida como lista delas)
 
    CONSULTAS (perguntas, não mudam nada):
      territoriosDe, contarExercitos, regioesDominadas,
@@ -40,6 +44,7 @@
      estado = {
        territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
        modo:        "dominio",        // chave de MODOS (classico, dominio, total, rapida, grande, equipes)
+       semente, rng:  números da sorte combinada (todo dado/embaralhada sai daqui)
        jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ],
                         objetivo (só no clássico), eliminadoPor (id de quem o eliminou),
                         reino + pontos (só no Grande Exército), equipe (só no Equipes) }, ... ],
@@ -176,30 +181,47 @@ const NOMES_EQUIPE = ["A", "B", "C"];
    UTILIDADES
    ---------------------------------------------------------------- */
 
+// SORTE COMBINADA: todo sorteio (dados, embaralhar) sai de um gerador que
+// vive no próprio estado (estado.rng, um número). Com a mesma semente e as
+// mesmas jogadas, qualquer aparelho chega exatamente ao mesmo resultado — é
+// o que deixa o online conferir os dados de todo mundo (ninguém inventa um 8).
+// Gerador mulberry32: devolve um número em [0, 1) e avança estado.rng.
+function sorte(estado) {
+  let t = (estado.rng = (estado.rng + 0x6D2B79F5) >>> 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// Semente nova (partida sozinho; no online, quem cria a sala sorteia e manda).
+function novaSemente() {
+  return Math.floor(Math.random() * 4294967296) >>> 0;
+}
+
 // Embaralha uma cópia do array (Fisher–Yates). Mesmo método do Super Trunfo.
-function embaralhar(array) {
+function embaralhar(array, estado) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(sorte(estado) * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
 
 // Rola um dado de 8 lados: devolve um número de 1 a 8.
-function rolarD8() {
-  return 1 + Math.floor(Math.random() * LADOS_DADO);
+function rolarD8(estado) {
+  return 1 + Math.floor(sorte(estado) * LADOS_DADO);
 }
 
 // Rola um dado de 6 lados (só no desempate final).
-function rolarD6() {
-  return 1 + Math.floor(Math.random() * 6);
+function rolarD6(estado) {
+  return 1 + Math.floor(sorte(estado) * 6);
 }
 
 // Rola "qtd" dados e devolve já ordenados do MAIOR para o menor.
-function rolarDados(qtd) {
+function rolarDados(qtd, estado) {
   const dados = [];
-  for (let i = 0; i < qtd; i++) dados.push(rolarD8());
+  for (let i = 0; i < qtd; i++) dados.push(rolarD8(estado));
   return dados.sort(function (a, b) { return b - a; });
 }
 
@@ -381,12 +403,20 @@ function descreverMeta(estado, idJogador) {
 // O objetivo que VALE agora para o jogador (a "Rixa de Sangue" vira o
 // objetivo reserva quando o alvo não existe, é ele mesmo, ou foi eliminado
 // por outro).
+// Rixa de Sangue: o alvo é a COR (índice em CORES); devolve o jogador que
+// está com essa cor na partida, ou null.
+function alvoDaRixa(estado, obj) {
+  const j = estado.jogadores.filter(function (x) { return x.cor === CORES[obj.alvo]; })[0];
+  return j ? j.id : null;
+}
+
 function objetivoEfetivo(estado, idJogador) {
   const obj = estado.jogadores[idJogador].objetivo;
   if (!obj) return null;
   if (obj.tipo !== "destruir") return obj;
-  const alvo = estado.jogadores[obj.alvo];
-  if (!alvo || obj.alvo === idJogador) return OBJETIVO_RESERVA;
+  const idAlvo = alvoDaRixa(estado, obj);
+  const alvo = idAlvo !== null ? estado.jogadores[idAlvo] : null;
+  if (!alvo || idAlvo === idJogador) return OBJETIVO_RESERVA;
   if (!alvo.vivo && alvo.eliminadoPor !== idJogador) return OBJETIVO_RESERVA;
   return obj;
 }
@@ -408,7 +438,7 @@ function objetivoCumprido(estado, idJogador) {
     }).length >= obj.qtd;
   }
   if (obj.tipo === "destruir") {
-    const alvo = estado.jogadores[obj.alvo];
+    const alvo = estado.jogadores[alvoDaRixa(estado, obj)];
     return !alvo.vivo && alvo.eliminadoPor === idJogador;
   }
   return false;
@@ -435,10 +465,11 @@ function descreverObjetivo(estado, idJogador) {
   const reserva = ef !== obj;
   let motivo = "";
   if (reserva) {
-    const alvo = estado.jogadores[obj.alvo];
+    const idAlvo = alvoDaRixa(estado, obj);
+    const alvo = idAlvo !== null ? estado.jogadores[idAlvo] : null;
     const cor = "o jogador " + NOMES_COR[obj.alvo];
     if (!alvo) motivo = cor + " não está nesta partida";
-    else if (obj.alvo === idJogador) motivo = cor + " é você mesmo";
+    else if (idAlvo === idJogador) motivo = cor + " é você mesmo";
     else {
       const quem = alvo.eliminadoPor != null ? estado.jogadores[alvo.eliminadoPor].nome : "outro jogador";
       motivo = cor + " (" + alvo.nome + ") foi eliminado por " + quem;
@@ -566,7 +597,7 @@ function ladoQueSobrou(estado) {
 // Desempate: aplica os critérios em ordem (cada um: { nome, valor(id) }) até
 // sobrar um. Se ainda empatar, cada um rola 1 d6 (de novo, se empatar).
 // Devolve { vencedor, decidiu (nome do critério que desempatou), dados }.
-function desempatar(ids, criterios) {
+function desempatar(estado, ids, criterios) {
   let restantes = ids.slice(), decidiu = null;
   for (let i = 0; i < criterios.length && restantes.length > 1; i++) {
     const c = criterios[i];
@@ -577,7 +608,7 @@ function desempatar(ids, criterios) {
   const dados = [];
   while (restantes.length > 1) {
     const rolagem = {};
-    restantes.forEach(function (id) { rolagem[id] = rolarD6(); });
+    restantes.forEach(function (id) { rolagem[id] = rolarD6(estado); });
     dados.push(rolagem);
     const melhor = Math.max.apply(null, restantes.map(function (id) { return rolagem[id]; }));
     restantes = restantes.filter(function (id) { return rolagem[id] === melhor; });
@@ -593,7 +624,7 @@ function finalizarRapida(estado) {
   const placar = estado.jogadores.map(function (j) {
     return { id: j.id, pontos: pontosRapida(estado, j.id), territorios: territoriosDe(estado, j.id).length, exercitos: contarExercitos(estado, j.id) };
   });
-  const d = desempatar(vivos, [
+  const d = desempatar(estado, vivos, [
     { nome: "pontos", valor: function (id) { return placar[id].pontos; } },
     { nome: "exercitos", valor: function (id) { return placar[id].exercitos; } },
   ]);
@@ -610,7 +641,7 @@ function finalizarGrande(estado) {
     return { id: j.id, pontos: j.pontos || 0, vivo: j.vivo, territorios: territoriosDe(estado, j.id).length, exercitos: contarExercitos(estado, j.id) };
   });
   const de = function (id) { return placar.filter(function (p) { return p.id === id; })[0]; };
-  const d = desempatar(vivos, [
+  const d = desempatar(estado, vivos, [
     { nome: "pontos", valor: function (id) { return de(id).pontos; } },
     { nome: "ultimoGolpe", valor: function (id) { return id === estado.ultimoGolpe ? 1 : 0; } },
     { nome: "territorios", valor: function (id) { return de(id).territorios; } },
@@ -644,12 +675,20 @@ function criarPartida(jogadores, opcoes) {
       return { nome: j.nome || r, tipo: j.tipo || "bot", reino: r, cor: COR_REINO[r] };
     });
   }
-  if (modo === "equipes") jogadores = embaralhar(jogadores); // sorteia assentos = equipes + sequência
+  // Sorte da partida: opcoes.semente (online: a mesma em todos os aparelhos).
+  const semente = opcoes.semente != null ? (opcoes.semente >>> 0) : novaSemente();
+  const inicio = { rng: semente };
+  // Equipes: o jogo sorteia assentos = equipes + sequência. Com
+  // opcoes.equipesProntas (online, equipes montadas na sala) a lista já vem
+  // na ordem de jogada, alternando as equipes (assento i = equipe i % nº).
+  if (modo === "equipes" && !opcoes.equipesProntas) jogadores = embaralhar(jogadores, inicio);
   const n = jogadores.length;
   const nEquipes = n / tamEquipe;
 
   const estado = {
     modo: modo,
+    semente: semente,
+    rng: inicio.rng,             // gerador da sorte (avança a cada dado/embaralhada)
     territorios: {},
     jogadores: jogadores.map(function (j, i) {
       return {
@@ -691,7 +730,7 @@ function criarPartida(jogadores, opcoes) {
     // Distribuição: embaralha os 64 territórios e reparte no rodízio.
     // As sobras (quando 64 não divide certinho, com 5 ou 6 jogadores)
     // caem naturalmente nos PRIMEIROS a receber. Cada território entra com 1.
-    const baralho = embaralhar(Object.keys(TERRITORIOS));
+    const baralho = embaralhar(Object.keys(TERRITORIOS), estado);
     baralho.forEach(function (t, i) {
       estado.territorios[t] = { dono: i % n, exercitos: BASE_POR_TERRITORIO };
     });
@@ -702,13 +741,14 @@ function criarPartida(jogadores, opcoes) {
   // Baralho: uma carta por território + os coringas, embaralhado.
   const cartas = Object.keys(TERRITORIOS).map(function (t) { return { t: t, s: simboloDoTerritorio(t) }; });
   for (let c = 0; c < CORINGAS; c++) cartas.push({ t: null, s: "coringa" });
-  estado.baralho = embaralhar(cartas);
+  estado.baralho = embaralhar(cartas, estado);
 
   // Clássico: cada jogador recebe um objetivo secreto diferente.
   // Rixa de Sangue só entra no sorteio se a cor-alvo estiver na partida
   // (pedido de Kauã). Contra a própria cor pode sair, como no WAR: vira reserva.
   if (modo === "classico") {
-    const objs = embaralhar(OBJETIVOS.filter(function (o) { return o.tipo !== "destruir" || o.alvo < n; }));
+    const cores = estado.jogadores.map(function (j) { return j.cor; });
+    const objs = embaralhar(OBJETIVOS.filter(function (o) { return o.tipo !== "destruir" || cores.indexOf(CORES[o.alvo]) !== -1; }), estado);
     estado.jogadores.forEach(function (j, i) { j.objetivo = objs[i]; });
   }
 
@@ -881,7 +921,7 @@ function trocarCartas(estado, indices) {
 
 // Tira uma carta do baralho para o jogador (reembaralha o descarte se acabar).
 function comprarCarta(estado, idJogador) {
-  if (!estado.baralho.length) { estado.baralho = embaralhar(estado.descarte); estado.descarte = []; }
+  if (!estado.baralho.length) { estado.baralho = embaralhar(estado.descarte, estado); estado.descarte = []; }
   if (!estado.baralho.length) return null;
   const c = estado.baralho.pop();
   estado.jogadores[idJogador].cartas.push(c);
@@ -927,8 +967,8 @@ function atacar(estado, origem, destino, opcoes) {
 
   const nAtq = dadosDeAtaque(a.exercitos);
   const nDef = dadosDeDefesa(d.exercitos);
-  const dadosAtaque = rolarDados(nAtq);   // todos os dados rolados (até 4)
-  const dadosDefesa = rolarDados(nDef);
+  const dadosAtaque = rolarDados(nAtq, estado);   // todos os dados rolados (até 4)
+  const dadosDefesa = rolarDados(nDef, estado);
 
   // Só os 3 MAIORES do atacante entram na comparação.
   const topAtaque = dadosAtaque.slice(0, MAX_DADOS_DEFESA);
@@ -1138,4 +1178,46 @@ function passarVez(estado) {
   montarReforco(estado, proximo);
   estado.ultimoEvento = { tipo: "novaVez", jogador: proximo, reforcos: estado.reforcosPendentes };
   return { ok: true, vez: proximo, reforcos: estado.reforcosPendentes, carta: carta };
+}
+
+
+/* ----------------------------------------------------------------
+   JOGADAS COMO DADO — usado pelo online
+   ----------------------------------------------------------------
+   A partida online é guardada como a semente + a LISTA de jogadas. Cada
+   aparelho refaz a partida aplicando a lista aqui, na mesma ordem; como a
+   sorte vem da semente, todos chegam ao mesmo estado. Jogada que não vale
+   (fora da vez, proibida) é recusada igualzinho em todos e não muda nada.
+     { t: "ref",    a, x }        posiciona 1 reforço em x
+     { t: "fimRef", a }           fecha o reforço (abre o ataque)
+     { t: "troca",  a, c: [i,j,k] } troca 3 cartas
+     { t: "atq",    a, o, d }     1 ataque de o em d (com escolha na conquista)
+     { t: "conq",   a, n }        quantos ficam no conquistado
+     { t: "fimAtq", a }           fecha o ataque
+     { t: "rem",    a, o, d, n }  remaneja n de o para d
+     { t: "passar", a }           passa a vez
+     { t: "bot",    a }           o bot joga o resto do turno de a
+   "a" é o jogador que fez a jogada: precisa ser o da vez.
+   ---------------------------------------------------------------- */
+function aplicarAcao(estado, acao) {
+  if (!acao || typeof acao !== "object") return { ok: false, erro: "Jogada inválida." };
+  if (estado.vencedor !== null) return { ok: false, erro: "A partida já terminou." };
+  if (acao.a !== estado.vez) return { ok: false, erro: "Não é a vez desse jogador." };
+  if (acao.n !== undefined && !Number.isInteger(acao.n)) return { ok: false, erro: "Quantidade inválida." };
+  switch (acao.t) {
+    case "ref": return posicionarReforco(estado, acao.x, 1);
+    case "fimRef": return terminarReforco(estado);
+    case "troca":
+      if (!Array.isArray(acao.c) || !acao.c.every(Number.isInteger)) return { ok: false, erro: "Escolha 3 cartas da sua mão." };
+      return trocarCartas(estado, acao.c.slice());
+    case "atq": return atacar(estado, acao.o, acao.d, { escolher: true });
+    case "conq": return moverNaConquista(estado, acao.n);
+    case "fimAtq": return terminarAtaque(estado);
+    case "rem": return remanejar(estado, acao.o, acao.d, acao.n);
+    case "passar": return passarVez(estado);
+    case "bot":
+      if (typeof jogarTurnoBot !== "function") return { ok: false, erro: "Bots não carregados." };
+      return jogarTurnoBot(estado);
+  }
+  return { ok: false, erro: "Jogada desconhecida." };
 }

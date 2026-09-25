@@ -20,6 +20,9 @@
    reino vivo com mais pontos quando os vikings caem.
    No Equipes (4 jogadores 2×2; 6 jogadores 3×3 ou 2×2×2): vezes alternadas,
    ninguém mira o parceiro e a equipe vencedora tem 5 regiões (ou sobrou só ela).
+   Sorte combinada (online): a cada 10 partidas, uma "gêmea" com a mesma
+   semente é jogada pela lista de jogadas (aplicarAcao) e tem de terminar
+   idêntica — é o que garante que todos os aparelhos veem a mesma partida.
    Termina com código 1 se houver qualquer falha (bom para automação).
    ============================================================ */
 "use strict";
@@ -35,7 +38,7 @@ for (const f of ["mapa.js", "motor.js", "bots.js"]) {
 // funções/constantes do jogo, vistas daqui (const/let não viram globais no vm)
 const J = vm.runInContext(`({ criarPartida, jogarTurnoBot, jogadoresVivos, verificarVitoria,
   objetivoCumprido, descreverObjetivo, MODOS, pontosRapida, regioesDaEquipe, inimigosVizinhos,
-  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS })`, ctx);
+  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS, aplicarAcao })`, ctx);
 
 const PARTIDAS = Number(process.argv[2]) || 3000;
 const MODOS = process.argv[3] ? [process.argv[3]] : Object.keys(J.MODOS);
@@ -44,7 +47,7 @@ const TOTAL_CARTAS = 66;
 let problemas = 0;
 
 for (const modo of MODOS) {
-  let ok = 0, falhas = 0, turnos = 0, maxT = 0, quebras = 0, ultimoDePe = 0;
+  let ok = 0, falhas = 0, turnos = 0, maxT = 0, quebras = 0, ultimoDePe = 0, gemeas = 0;
   const porObjetivo = {}, porVencedor = {};
   const quebra = function (msg) { quebras++; if (quebras <= 5) console.log("QUEBRA [" + modo + "]:", msg); };
   for (let g = 0; g < PARTIDAS; g++) {
@@ -74,10 +77,14 @@ for (const modo of MODOS) {
     if (modo === "classico" && e.jogadores.some(function (j) {
       return j.objetivo.tipo === "destruir" && j.objetivo.alvo >= n;
     })) quebra("Rixa contra cor ausente");
+    // gêmea: mesma semente, jogada como lista de jogadas (como no online)
+    const gemea = g % 10 === 0 ? J.criarPartida(jogadores, { modo: modo, tamanhoEquipe: tam, semente: e.semente }) : null;
+    if (gemea && JSON.stringify(gemea) !== JSON.stringify(e)) quebra("mesma semente, começo diferente");
     let t = 0;
     try {
       while (e.vencedor === null && t < LIMITE_TURNOS) {
         J.jogarTurnoBot(e); t++;
+        if (gemea) J.aplicarAcao(gemea, { t: "bot", a: gemea.vez });
         const cartas = e.baralho.length + e.descarte.length + e.jogadores.reduce(function (s, j) { return s + j.cartas.length; }, 0);
         if (cartas !== TOTAL_CARTAS) quebra("cartas: " + cartas);
         if (Object.keys(e.territorios).some(function (x) { return e.territorios[x].exercitos < 1; })) quebra("território vazio");
@@ -92,6 +99,7 @@ for (const modo of MODOS) {
       continue;
     }
     if (e.vencedor === null) { falhas++; continue; }
+    if (gemea) { gemeas++; if (JSON.stringify(gemea) !== JSON.stringify(e)) quebra("mesma semente e mesmas jogadas, partida diferente"); }
     ok++; turnos += t; maxT = Math.max(maxT, t);
     const sozinho = J.jogadoresVivos(e).length === 1;
     const motivo = e.resultado && e.resultado.motivo;
@@ -131,7 +139,7 @@ for (const modo of MODOS) {
   problemas += falhas + quebras;
   console.log("\n[" + J.MODOS[modo].nome + "] " + ok + "/" + PARTIDAS + " partidas ok · falhas: " + falhas +
     " · quebras de regra: " + quebras + " · média " + (turnos / Math.max(ok, 1)).toFixed(1) +
-    " turnos (máx " + maxT + ") · vitórias por último de pé: " + ultimoDePe);
+    " turnos (máx " + maxT + ") · vitórias por último de pé: " + ultimoDePe + " · gêmeas idênticas: " + gemeas);
   if (modo === "classico") {
     console.log("vitórias por objetivo:", Object.entries(porObjetivo).sort(function (a, b) { return b[1] - a[1]; })
       .map(function (p) { return p[0] + " " + p[1]; }).join(" · "));

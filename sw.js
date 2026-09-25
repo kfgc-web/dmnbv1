@@ -5,7 +5,7 @@
    quando ela muda, o navegador baixa a versão nova em segundo
    plano e a tela mostra "Nova versão disponível".
    ============================================================ */
-const VERSAO = 14;
+const VERSAO = 15;
 const CACHE = "britannia-v" + VERSAO;
 const ARQUIVOS = [
   "./",
@@ -16,6 +16,8 @@ const ARQUIVOS = [
   "bots.js?v=" + VERSAO,
   "desenho.js?v=" + VERSAO,
   "cartas.js?v=" + VERSAO,
+  "rede.js?v=" + VERSAO,
+  "online.js?v=" + VERSAO,
   "telas.js?v=" + VERSAO,
   "app.js?v=" + VERSAO,
   "manifest.webmanifest",

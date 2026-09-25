@@ -164,7 +164,7 @@ function botBonusObjetivo(estado, id, alvo, donoAlvo) {
     return 60 + meus * 8;
   }
   if (obj.tipo === "destruir") {
-    if (donoAlvo !== obj.alvo) return 0;
+    if (donoAlvo !== alvoDaRixa(estado, obj)) return 0;
     return 80 + (territoriosDe(estado, donoAlvo).length <= 3 ? 400 : 0);
   }
   return 15; // territorios / territorios2: qualquer expansão ajuda

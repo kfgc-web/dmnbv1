@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (app aprovado; próximo: online).
+Última atualização: 25/09/2026 (online entregue; falta Kauã publicar as regras do banco e testar com amigos).
 
 ---
 
@@ -21,9 +21,10 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Protocolo:** esclarecer → confirmar → **"pode ir"** → agir. Nada de mudar arquivos do jogo antes do OK explícito. Protótipos e maquetes para Kauã avaliar (fora do repositório) podem ser feitos antes.
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
 - **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` **e `VERSAO` em `sw.js` para o mesmo N** (é o que faz o app instalado mostrar "Nova versão disponível"; o teste da tela confere que os dois batem). Arquivo novo do jogo → acrescentar na lista `ARQUIVOS` do `sw.js`.
-- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno e a vitória certa de cada modo). Precisa terminar em "tudo certo, zero falhas".
+- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno, a vitória certa de cada modo e, a cada 10 partidas, uma "gêmea" com a mesma semente jogada pela lista de jogadas que tem de terminar idêntica). Precisa terminar em "tudo certo, zero falhas". **Toda sorte do motor tem de sair de `sorte(estado)`** (nunca `Math.random` nas regras nem nos bots), senão o online dessincroniza.
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
 - **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar), celular em pé (aviso de girar), celular deitado (mapa à esquerda, painel à direita, rolagem única), tablet em pé e o app (versão do sw.js, manifesto, funciona sem internet, aviso de versão nova e atualização). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
+- **Depois de mexer no online** (`rede.js`, `online.js`, regras do banco, ou nas jogadas do motor): `node ferramentas/teste-online.js` (`--prints` para prints). Sobe o emulador oficial do Firebase com `ferramentas/regras-firebase.json` e joga com vários "aparelhos": sala, convite, cor, modo, regras recusando estranho/trapaça, partida igual em todos a cada jogada, bots, jogador parado (botão), jogadas ao mesmo tempo, quem cai e volta, sair e voltar, Equipes montadas na sala, Grande Exército com reino escolhido. Precisa terminar em "tudo certo". Instalação (uma vez): `npm i --no-save --prefix ferramentas firebase@12.11.0 firebase-tools@15` (precisa de Java). No ambiente do Claude, rodar os testes com `NODE_PATH=$(npm root -g)` (o Playwright é global). O emulador é iniciado sem regras e as regras são publicadas por HTTP (o proxy do ambiente bloqueia o firebase-tools de fazer isso).
 
 ## 3. Regras do jogo
 
@@ -34,7 +35,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Reforço-base** = `max(3, round(territórios / 3))` + bônus regionais + trocas de cartas.
 - **Turno:** reforço → ataque → remanejamento.
 - **Vitória:** depende do **modo** (abaixo). Em todos, sobrar um único jogador vivo (no Equipes, uma única equipe) também é vitória.
-- **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots; Grande Exército sempre 9. Distribuição inicial: rodízio embaralhado, 1 exército por território (Grande Exército: começo fixo, abaixo). Por enquanto a tela tem **um humano** ("Você") e o resto bots.
+- **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots; Grande Exército sempre 9. Distribuição inicial: rodízio embaralhado, 1 exército por território (Grande Exército: começo fixo, abaixo). Sozinho: **um humano** ("Você") e o resto bots. Online: várias pessoas (cada uma no seu aparelho), o resto bots (§3, "Online").
 
 ### Modos de jogo (escolhidos na tela de início; padrão: Clássico)
 - **Clássico:** cada jogador recebe um **objetivo secreto** diferente; vence quem cumprir o seu **na hora, durante o próprio turno** (checado após reforço, troca, ataque, conquista e remanejamento). O objetivo aparece no painel (botão Esconder/Mostrar) e todos são revelados na vitória.
@@ -59,6 +60,15 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
   - Parceiro eliminado: o resto da equipe segue; cartas do eliminado vão para quem o eliminou. Marquinha da equipe (letra A/B/C) nas peças e na lista de jogadores.
 - A tela de início só mostra os modos que cabem no nº de jogadores (`modoDisponivel`).
 
+### Online (jogar com amigos) — decidido com Kauã
+- **Sala** com código de 5 letras + link de convite (`?sala=CODIGO`, entra direto). Quem **criou a sala** escolhe o modo e cada lugar (aberto para pessoa / bot / vazio; pode tirar alguém) e começa a partida; lugares abertos viram bot ao começar.
+- Cada pessoa escolhe **sua cor** (as 6 cores; bots ficam com as que sobram). No **Grande Exército** o lugar é o reino ("Sentar aqui"), cor fixa do reino. Nos outros modos a **ordem da mesa é sorteada** ao começar.
+- **Equipes online:** quem criou a sala **monta as equipes** (toca nas letras A/B/C) ou toca em **Sortear**; o jogo sorteia a ordem, alternando as equipes.
+- **Quem caiu** (desconectado): na vez dele, depois de **10 s**, o bot joga **aquele turno**. Voltou (abrir o app de novo já volta sozinho para a partida), joga o próximo normalmente.
+- **Quem está conectado mas parado:** depois de **60 s sem nenhum toque** na vez dele, quem criou a sala (se estiver fora, o "juiz") vê o botão **"Bot joga por Fulano"** — só aquele turno. Qualquer toque zera a contagem. Nada é automático sem o toque de quem criou.
+- Sair no meio (Novo jogo → Sair): a partida continua com o bot; a tela de início oferece **"Voltar para a partida online"** (não volta sozinho).
+- Limite aceito por Kauã: quem fuçar o navegador consegue espiar objetivos e cartas dos outros (esconder de verdade exigiria servidor pago). Dados e jogadas **não** dá para falsificar.
+
 ### Objetivos do Clássico (17, aprovados por Kauã)
 1. Alto-Rei da Irlanda — Ériu + Dál Riata
 2. Rota de Dyflin — Ériu + Cymru
@@ -71,7 +81,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 9. De Eoforwic a Lundenburg — Northhymbre + Westseaxe
 10. Bretwalda — 36 territórios
 11. Terra Assentada — 27 territórios com 2+ exércitos em cada
-12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). **Só é sorteada se a cor estiver na partida** (pedido de Kauã). Pode sair contra a própria cor (como no WAR); nesse caso, ou se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
+12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Mira a **cor** (`alvoDaRixa`: quem estiver com `CORES[alvo]`), não o assento — no online cada um escolhe a cor. **Só é sorteada se a cor estiver na partida** (pedido de Kauã). Pode sair contra a própria cor (como no WAR); nesse caso, ou se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
 - Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
 
 ### Reforço "Modo B" (sequência guiada)
@@ -95,7 +105,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 
 ## 4. Arquitetura — arquivos
 
-Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → telas.js → app.js** (+ `estilo.css`), todos com `?v=N`.
+Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → rede.js → online.js → telas.js → app.js** (+ `estilo.css`), todos com `?v=N`.
 
 | Arquivo | Papel |
 |---|---|
@@ -107,20 +117,22 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 | `desenho.js` | **Gerado** pelo gerador (§6) — não editar à mão. Litoral, contorno de cada território, divisas, lagos, rotas, posição das peças e dos nomes de região |
 | `cartas.js` | Só o **visual** das cartas (SVG): pergaminho, borda trançada celta, faixa com nome, silhueta do território, medalhão do símbolo |
 | `telas.js` | Toda a interface: tabuleiro, painel, janelas (início, troca de cartas, conquista, vitória), dados, zoom |
+| `rede.js` | Conversa com a nuvem (Firebase Realtime Database, projeto `domination-britannia`, plano Spark): carrega o Firebase **só quando alguém escolhe jogar online**, login anônimo, salas, lugares, presença (conectado/desconectado), lista de jogadas. Formato do banco no topo do arquivo |
+| `online.js` | Tela de entrada/sala e a partida online: refaz a partida pela lista de jogadas, fila de envio das minhas jogadas, juiz dos bots, 10 s de quem caiu, botão do parado (60 s) |
 | `app.js` | O jogo como app: registra o `sw.js`, aviso "Nova versão disponível" (só recarrega quando o jogador toca), botão "Instalar" (quando o navegador oferece), trava deitado no app instalado |
 | `sw.js` | Service worker: guarda os arquivos (`ARQUIVOS`, com `VERSAO`) para abrir sem internet; versão nova espera o toque no aviso; guarda também as fontes do Google |
 | `manifest.webmanifest` | Dados do app: nome "Domination: Britannia" (curto "Domination"), tela cheia, **deitado**, ícones |
 | `icones/` | `icone-fonte.webp` (arte do escudo, feita por IA a pedido de Kauã) e os PNG gerados por `ferramentas/gerar-icones.js` (192/512, maskable com margem para o círculo do Android, apple-touch, favicon) |
-| `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `gerar-icones.js`, `stress.js` (stress dos bots) e `teste-tela.js` (teste no navegador) |
+| `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `gerar-icones.js`, `stress.js` (stress dos bots), `teste-tela.js` (teste no navegador), `teste-online.js` (vários aparelhos contra o emulador do Firebase) e `regras-firebase.json` (regras de segurança do banco — é o que se cola no console do Firebase) |
 
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
 
-**Ações:** `criarPartida(jogadores, { modo, tamanhoEquipe })` · `calcularReforcos` → `{ base, porRegiao, ordem, mar, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma).
+**Ações:** `criarPartida(jogadores, { modo, tamanhoEquipe, semente, equipesProntas })` · `calcularReforcos` → `{ base, porRegiao, ordem, mar, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma) · `aplicarAcao(estado, acao)` — uma jogada descrita como dado (`{ t: "ref"|"fimRef"|"troca"|"atq"|"conq"|"fimAtq"|"rem"|"passar"|"bot", a, ... }`); é assim que a tela joga e o online guarda a partida.
 
 **Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`, `objetivoCumprido`, `objetivoEfetivo`, `descreverObjetivo`, `descreverMeta`, `modoDisponivel`, `saoAliados`, `membrosDaEquipe`, `regioesDaEquipe`, `pontosRapida`, `ehViking`. Dados dos modos/objetivos: `MODOS`, `OBJETIVOS`, `OBJETIVO_RESERVA`, `RODADAS_RAPIDA`, `REINOS_GRANDE`, `COR_REINO`, `META_VIKINGS`, `NOMES_EQUIPE`. Fins de partida: `finalizarRapida`, `finalizarGrande` (desempate em `desempatar`).
 
-**Estado** (dado simples, pronto para salvar/enviar): `modo`, `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico, `reino` e `pontos` no Grande Exército, `equipe` no Equipes, e `eliminadoPor`), `vez`, `turno` (rodada), `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `resultado` (como acabou: `motivo` = objetivo/regioes/ultimo/rapida/vikings/reinos/equipeRegioes, + placar e desempate), `ultimoGolpe`, `ultimoEvento`, `log`. A ordem dos assentos é a ordem de jogada.
+**Estado** (dado simples, pronto para salvar/enviar): `modo`, `semente` + `rng` (sorte combinada: mesma semente + mesmas jogadas = mesma partida em qualquer aparelho), `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico, `reino` e `pontos` no Grande Exército, `equipe` no Equipes, e `eliminadoPor`), `vez`, `turno` (rodada), `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `resultado` (como acabou: `motivo` = objetivo/regioes/ultimo/rapida/vikings/reinos/equipeRegioes, + placar e desempate), `ultimoGolpe`, `ultimoEvento`, `log`. A ordem dos assentos é a ordem de jogada.
 
 ### Tela — pontos-chave
 - Mapa estilo WAR: cada território é uma área pintada com a **cor da sua região**; divisa fina entre territórios, grossa entre regiões; peças (discos) com a **cor do dono** e o nº de exércitos. Tocar no território ou na peça.
@@ -131,7 +143,14 @@ Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" 
 - **Celular: só deitado** (decisão de Kauã). Em pé (largura ≤ 600) aparece o aviso **"Gire o celular"** cobrindo tudo. Deitado (altura ≤ 540): cabeçalho baixo, mapa à esquerda (no zoom 1 a ilha inteira cabe na altura), painel de 270 px à direita rolando como **uma página só**; janelas roláveis; respeita o entalhe (`safe-area`).
 - **Tablet em pé** (até 860 de largura): painel embaixo ocupando metade da tela, rolando como uma página só.
 - Painel mostra o **modo** e a meta do jogador: objetivo (Clássico), lado (Grande Exército), equipe e regiões da equipe (Equipes), pontos (Partida Rápida).
-- `HUMANO` (assento do jogador) é definido em `novoJogo`: no Grande Exército e no Equipes não é o assento 0.
+- `HUMANO` (assento do jogador) é definido em `novoJogo`: no Grande Exército e no Equipes não é o assento 0. No online, é o assento deste aparelho (`abrirPartidaOnline`).
+- Toda jogada do jogador passa por `jogar(acao)` (aplica com `aplicarAcao` e, no online, manda para a nuvem). Jogada de outro aparelho chega por `receber(acao)` (mostra dados, pisca). Sozinho, os bots rodam em `rodarBots`; no online, **não** (o juiz grava `{ t: "bot" }` e todos calculam igual).
+
+### Online — como funciona por dentro
+- A nuvem guarda `partida/config` (semente, modo, jogadores na ordem de jogada com `uid` e `lugar`) + `acoes/0000000…` (lista de jogadas, só se acrescenta; cada número só pode ser gravado uma vez). Cada aparelho refaz a partida com o motor. Ninguém rola dado no próprio aparelho: a sorte vem da semente.
+- Minha jogada vale na hora aqui e entra numa fila de envio (numerada). Se outro gravou aquele número antes (ex.: o bot assumiu), o aparelho refaz a partida pela lista. Cada jogada leva um resumo (`h`) do estado; se não bater, aparece aviso de "fora de sincronia".
+- **Juiz** = a pessoa conectada de menor número na mesa: grava os turnos dos bots (pausa de 0,75 s) e o bot de quem caiu (10 s). As regras do banco só deixam gravar jogada em nome do próprio assento (bot: qualquer membro da sala).
+- Sem servidor: a faxina das salas com mais de 3 dias é feita por quem cria sala nova.
 - Bots jogam com pausa (~780 ms); territórios que trocam de dono piscam.
 - Cores dos assentos: `#c0392b`, `#2c6fbb`, `#27ae60`, `#e0a200`, `#8e44ad`, `#16a085` (+ `#1e1e1e`, `#ecf0f1`, `#e84393` no Grande Exército). Acento pergaminho/osso `#cbb892`; títulos em **Cinzel**.
 
@@ -176,14 +195,10 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 9. Playtest no celular aprovado; Rixa de Sangue só sorteada contra cores presentes.
 10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos. Playtest de Kauã aprovado; dados mantidos (4 d8 × 3 d8 — simulação mostrou equilíbrio); 3×3 fica como está (aparece com 5 adversários).
 11. **App no celular (PWA)**: instalável, abre sem internet, avisa versão nova; ícone do escudo; jogo só deitado no celular.
+12. **Online com amigos** (Firebase `domination-britannia`): sala com código e convite, cor escolhida, equipes montadas na sala, reino escolhido no Grande Exército, partida guardada como lista de jogadas com sorte combinada (motor com `sorte(estado)`), bots pelo juiz, quem cai vira bot em 10 s, botão do parado (60 s), volta sozinho ao reabrir o app.
 
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
-2. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e até 9 assentos (Grande Exército). Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
-   - **Antes de começar (no chat novo):** o repositório do Super Trunfo não vem junto — pedir acesso a `kfgc-web/super-trunfo-egipcio-online-multiplayer` (ferramenta de adicionar repositório) para reaproveitar login anônimo e salas. Guiar Kauã a criar o projeto Firebase (Realtime Database + login anônimo) e colar a configuração; regras de segurança do banco fazem parte da entrega.
-   - **O que já ajuda:** o `estado` do motor é dado simples (JSON), pronto para ir para a nuvem; `jogarTurnoBot` assume o turno em qualquer fase (bot no lugar de quem caiu); a ordem dos assentos é a ordem de jogada.
-   - **O que vai mudar na tela:** hoje `telas.js` supõe **um humano** (`HUMANO`) e roda os bots localmente (`rodarBots`). No online: cada aparelho sabe o seu assento; só um aparelho (ou regra combinada) roda os bots para não jogarem em dobro; ações viram escritas no estado da nuvem e a tela redesenha quando o estado muda. Pensar em quem rola os dados (evitar trapaça) e em partidas longas (Grande Exército com 9).
-   - Tela nova de **sala**: criar/entrar com código de 5 letras, link de convite, escolher modo/lado/assento e cor, completar com bots, começar.
-   - Junto com o online: **escolha de cor** de cada jogador na sala (decidido deixar para lá; hoje a cor é do assento — a Rixa de Sangue terá de olhar a cor, não o assento). No Grande Exército as cores seguem fixas por reino.
-3. Ideia anotada: **salvar a partida** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida).
+2. **Online** — entregue (histórico 12). **Pendente com Kauã:** publicar as regras (`ferramentas/regras-firebase.json` → console do Firebase → Realtime Database → Regras → Publicar) e testar com amigos de verdade (o teste automático usa o emulador; o Firebase de verdade ainda não foi usado). Ideias para depois: revanche na mesma sala, bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
+3. Ideia anotada: **salvar a partida sozinho** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida contra bots; a online já sobrevive).
