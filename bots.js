@@ -77,14 +77,20 @@ function botAtaqueBom(exAtq, exDef) {
    QUEM O BOT ACEITA ATACAR
    ----------------------------------------------------------------
    Em geral, qualquer inimigo vizinho (o motor já tira o parceiro no modo
-   Equipes). No Grande Exército, um reino-bot só ataca os Vikings: os reinos
-   podem se atacar pela regra, mas o bot não trai (pedido de Kauã: não forçar).
+   Equipes). No Grande Exército, um reino-bot ataca os Vikings e, se outro
+   reino o atacar, revida contra ele (estado.jogadores[id].revide). Por conta
+   própria o bot não trai (pedidos de Kauã: não forçar a traição, mas não
+   morrer sem reagir).
    A "frente" do bot é onde ele tem alvo — é para lá que vão reforço e tropa.
    ---------------------------------------------------------------- */
 function botAlvos(estado, id, t) {
   const alvos = inimigosVizinhos(estado, t);
   if (estado.modo !== "grande" || ehViking(estado, id)) return alvos;
-  return alvos.filter(function (v) { return ehViking(estado, estado.territorios[v].dono); });
+  const revide = estado.jogadores[id].revide || [];
+  return alvos.filter(function (v) {
+    const dono = estado.territorios[v].dono;
+    return ehViking(estado, dono) || revide.indexOf(dono) !== -1;
+  });
 }
 function botFrente(estado, id, t) {
   return botAlvos(estado, id, t).length > 0;

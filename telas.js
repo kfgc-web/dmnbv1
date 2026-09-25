@@ -815,6 +815,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         "</div>" +
         '<button class="primary" id="startBtn" style="width:100%">Começar</button>' +
         '<div class="inicioOnline" id="inicioOnline"></div>' +
+        '<p class="inicioCopy">© 2026 Kauã Felipe Gielow Camargo · Todos os direitos reservados</p>' +
       "</div>";
     ov.classList.add("on");
     const q = ov.querySelector("#advQty");

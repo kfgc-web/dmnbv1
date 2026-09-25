@@ -38,13 +38,33 @@ for (const f of ["mapa.js", "motor.js", "bots.js"]) {
 // funções/constantes do jogo, vistas daqui (const/let não viram globais no vm)
 const J = vm.runInContext(`({ criarPartida, jogarTurnoBot, jogadoresVivos, verificarVitoria,
   objetivoCumprido, descreverObjetivo, MODOS, pontosRapida, regioesDaEquipe, inimigosVizinhos,
-  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS, aplicarAcao })`, ctx);
+  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS, aplicarAcao, atacar, botAlvos, vizinhosDe })`, ctx);
 
 const PARTIDAS = Number(process.argv[2]) || 3000;
 const MODOS = process.argv[3] ? [process.argv[3]] : Object.keys(J.MODOS);
 const LIMITE_TURNOS = 8000;
 const TOTAL_CARTAS = 66;
 let problemas = 0;
+
+// Grande Exército: reino atacado por outro reino revida (e só contra quem o atacou).
+if (MODOS.indexOf("grande") !== -1) {
+  const e = J.criarPartida([], { modo: "grande" });
+  const mierce = e.jogadores.filter(function (j) { return j.reino === "Mierce"; })[0].id;
+  const wes = e.jogadores.filter(function (j) { return j.reino === "Westseaxe"; })[0].id;
+  const cym = e.jogadores.filter(function (j) { return j.reino === "Cymru"; })[0].id;
+  // um território de Westseaxe vizinho de Mierce ataca
+  const par = Object.keys(e.territorios).map(function (t) {
+    return e.territorios[t].dono === wes ? [t, J.vizinhosDe(t).filter(function (v) { return e.territorios[v].dono === mierce; })[0]] : null;
+  }).filter(function (x) { return x && x[1]; })[0];
+  const antes = Object.keys(e.territorios).some(function (t) { return e.territorios[t].dono === mierce && J.botAlvos(e, mierce, t).some(function (v) { return e.territorios[v].dono === wes; }); });
+  e.vez = wes; e.fase = "ataque"; e.territorios[par[0]].exercitos = 30;
+  J.atacar(e, par[0], par[1], {});
+  const depois = Object.keys(e.territorios).some(function (t) { return e.territorios[t].dono === mierce && J.botAlvos(e, mierce, t).some(function (v) { return e.territorios[v].dono === wes; }); });
+  const outro = Object.keys(e.territorios).some(function (t) { return e.territorios[t].dono === mierce && J.botAlvos(e, mierce, t).some(function (v) { return e.territorios[v].dono === cym; }); });
+  const ok = !antes && depois && !outro && e.jogadores[mierce].revide.join() === String(wes);
+  console.log("\n[Grande Exército] revide: " + (ok ? "ok (Mierce atacado por Westseaxe revida só contra Westseaxe)" : "QUEBRA"));
+  if (!ok) problemas++;
+}
 
 for (const modo of MODOS) {
   let ok = 0, falhas = 0, turnos = 0, maxT = 0, quebras = 0, ultimoDePe = 0, gemeas = 0;

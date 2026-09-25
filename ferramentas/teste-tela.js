@@ -80,6 +80,9 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     };
     const modos = await modosVisiveis(p);
     checar("tela de início mostra os 6 modos (com 4 jogadores)", modos.length === 6, modos.join(", "));
+    checar("aviso de © na tela de início", await p.$eval(".inicioCopy", function (e) {
+      return e.offsetParent !== null && e.textContent.indexOf("© 2026 Kauã Felipe Gielow Camargo") === 0;
+    }));
     await p.click("#advPlus");
     checar("com 5 jogadores o modo Equipes some", (await modosVisiveis(p)).indexOf("equipes") === -1);
     await p.click("#advPlus");
