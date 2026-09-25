@@ -233,11 +233,17 @@
   /* ---------- responsive ---------- */
   @media (max-width:860px){
     main{ flex-direction:column; }
+    /* celular: tela inteira (100dvh desconta a barra do navegador) */
+    #app{ height:100vh; height:100dvh; }
+    /* painel aberto = metade da tela, rolando como UMA página só */
     #panel{ width:100%; border-left:none; border-top:1px solid var(--line);
-      max-height:46vh; }
-    #boardScroll{ flex:1; min-height:38vh; }
+      display:block; flex:0 0 50vh; flex-basis:50dvh; height:50vh; height:50dvh; max-height:none;
+      overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+    #panel .players, #panel .logwrap{ overflow:visible; }
+    #panel .logwrap{ flex:none; min-height:0; }
+    #boardScroll{ flex:1 1 auto; min-height:0; }
     .brand h1{ font-size:17px; }
-    .painelRecolhido #panel{ width:100%; max-height:none; }
+    .painelRecolhido #panel{ width:100%; flex:0 0 auto; height:auto; overflow:visible; }
     header{ padding:8px 10px; gap:8px; }
     .brand h1{ font-size:14px; letter-spacing:.08em; }
     .tool{ gap:4px; }
