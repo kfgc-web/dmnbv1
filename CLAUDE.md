@@ -54,7 +54,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 9. De Eoforwic a Lundenburg — Northhymbre + Westseaxe
 10. Bretwalda — 36 territórios
 11. Terra Assentada — 27 territórios com 2+ exércitos em cada
-12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). **Só é sorteada se a cor estiver na partida** e nunca contra a própria cor (pedido de Kauã). Se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
+12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). **Só é sorteada se a cor estiver na partida** (pedido de Kauã). Pode sair contra a própria cor (como no WAR); nesse caso, ou se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
 - Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
 
 ### Reforço "Modo B" (sequência guiada)
@@ -155,6 +155,9 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest de Kauã no celular~~ — ok. Ajuste que saiu dele: Rixa de Sangue só contra cores presentes.
-2. **Outros modos** — em definição com Kauã. **Partida Rápida:** acaba em 15 turnos; cada território vale 1 ponto, território de região inteira vale 3. Grande Exército e Duplas/Trios: regras em discussão.
+2. **Outros modos** — em definição com Kauã; implantar **todos de uma vez** quando as regras estiverem fechadas.
+   - **Partida Rápida (definido):** acaba após **15 rodadas** (15 turnos por jogador). Pontos: 1 por território; território de região inteira vale 3. Desempate: mais exércitos. Último de pé também vence.
+   - **Grande Exército (em definição):** 1 jogador viking × vários reinos (cada jogador é um reino). Vikings começam com parte de Northhymbre e East Engle, com muitos exércitos e reforço extra por mar no litoral. Os outros reinos começam com a região inteira. Vitória viking: Northhymbre + Mierce + East Engle + Westseaxe inteiras. Reinos: eliminar os vikings; reinos podem se atacar (bots quase não atacam aliados, sem forçar).
+   - **Duplas/Trios:** adiado. Problema aberto: sem atacar aliado, como fechar região (bônus)?
 3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
 4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
