@@ -18,6 +18,11 @@
      bot joga aquele turno. Voltou? Joga normalmente o próximo.
    - QUEM ESTÁ PARADO (conectado): depois de 60 s sem nenhum toque na vez
      dele, quem criou a sala vê o botão "Bot joga por ele" (só aquele turno).
+   - REVANCHE: no fim, quem criou a sala (se estiver fora, o juiz) toca em
+     "Jogar de novo": nasce uma sala nova com o mesmo modo e os mesmos
+     lugares, e a jogada { t: "revanche", sala } leva todos para ela (cada
+     um volta ao seu lugar, com a sua cor). Quem não estiver lá fica com o
+     lugar aberto, esperando; o convite antigo também leva para a nova.
    ============================================================ */
 (function () {
   "use strict";
@@ -39,7 +44,7 @@
       codigo: null, meta: null, assentos: null, lugar: null,
       config: null, meuId: -1, log: [], fila: [], enviando: false, geracao: 0,
       marco: 0, vistoN: -1, pedidoEm: null, caiuEm: {}, sinalVisto: {}, onlineAntes: {},
-      ultimoSinal: 0, parado: null, timer: null, avisouSinc: false,
+      ultimoSinal: 0, parado: null, timer: null, avisouSinc: false, revancheHtml: null, chamando: false,
     };
   }
 
@@ -117,10 +122,11 @@
   }
 
   // Entra (ou volta) numa sala e passa a acompanhar o que acontece nela.
-  async function entrar(codigo) {
+  // lugar: o lugar preferido (na revanche, o mesmo da partida anterior).
+  async function entrar(codigo, lugar, corAntes) {
     const nome = lerGuardado(CHAVE_NOME) || "Jogador";
-    const cor = Number(lerGuardado(CHAVE_COR)) || 0;
-    const r = await REDE.entrarSala(codigo, nome, cor);
+    const cor = Number.isInteger(corAntes) ? corAntes : Number(lerGuardado(CHAVE_COR)) || 0;
+    const r = await REDE.entrarSala(codigo, nome, cor, lugar);
     desligar();
     S.codigo = codigo;
     S.fase = r.jogando ? "entrando" : "lobby";
@@ -461,7 +467,7 @@
   function montarEstado(config, acoes) {
     const jog = config.jogadores.map(function (j) { return { nome: limparNome(j.nome) || "Jogador", tipo: j.tipo, cor: j.cor }; });
     const e = criarPartida(jog, { modo: config.modo, tamanhoEquipe: config.tamEquipe, semente: config.semente, equipesProntas: true });
-    acoes.forEach(function (a) { aplicarAcao(e, a); });
+    acoes.forEach(function (a) { if (a.t !== "revanche") aplicarAcao(e, a); });
     return e;
   }
 
@@ -475,6 +481,8 @@
       if (S.meuId < 0) throw new Error("Você não está nessa partida.");
       REDE.marcarPresenca(S.codigo, S.config.jogadores[S.meuId].lugar);
       S.log = await REDE.lerAcoes(S.codigo);
+      const rev = S.log.filter(function (a) { return a.t === "revanche"; })[0];
+      if (rev) { irParaRevanche(rev.sala); return; } // a revanche já foi chamada: vai direto para a sala nova
       S.marco = Date.now(); S.vistoN = S.log.length;
       S.config.jogadores.forEach(function (j, id) { if (j.tipo === "humano") { S.onlineAntes[id] = estaOnline(id); if (!S.onlineAntes[id]) S.caiuEm[id] = Date.now(); } });
       T().abrirPartidaOnline(montarEstado(S.config, S.log), S.meuId);
@@ -498,6 +506,7 @@
   function chegouAcao(n, acao) {
     if (S.fase !== "jogo" || n < S.log.length) return;
     if (n > S.log.length) { recarregar(); return; } // pulou alguma (não deveria): refaz tudo
+    if (acao.t === "revanche") { irParaRevanche(acao.sala); return; }
     S.log.push(acao);
     if (S.fila.length && S.fila[0].id === acao.id) { // a minha jogada, já aplicada aqui
       S.fila.shift();
@@ -602,6 +611,7 @@
       }
     }
     if (parado !== S.parado) { S.parado = parado; T().render(); }
+    atualizarRevanche();
   }
 
   // Grava "o bot joga este turno de v" como a jogada número n.
@@ -639,6 +649,64 @@
       if (S.parado === null || e.vez !== S.parado) return;
       b.disabled = true;
       pedirBot(S.parado, S.log.length);
+    });
+  }
+
+  /* ---------------- revanche ---------------- */
+  // Parte online da janela de vitória: o botão "Jogar de novo" para quem chama
+  // a revanche (quem criou a sala; se estiver fora, o juiz), e o aviso para os outros.
+  function htmlRevanche() {
+    const chefe = chefeId();
+    if (chefe === S.meuId) {
+      return '<button class="primary" id="onRevanche" style="width:100%"' + (S.chamando ? " disabled" : "") + ">" +
+        (S.chamando ? "Abrindo a sala…" : "Jogar de novo") + "</button>" +
+        '<p class="onRevNota">Todos voltam para a sala, com os mesmos lugares e cores.</p>';
+    }
+    const nome = chefe >= 0 ? esc(S.config.jogadores[chefe].nome) : "alguém";
+    return '<p class="onRevNota">Esperando ' + nome + " chamar a revanche…</p>";
+  }
+  function atualizarRevanche() {
+    const box = document.querySelector("#overlay.on #onRevancheBox");
+    if (!box || S.fase !== "jogo") return;
+    const html = htmlRevanche();
+    if (html === S.revancheHtml && box.innerHTML) return;
+    S.revancheHtml = html;
+    box.innerHTML = html;
+    const b = box.querySelector("#onRevanche");
+    if (b) b.addEventListener("click", chamarRevanche);
+  }
+
+  // Cria a sala nova (mesmo modo, mesmos lugares) e avisa a todos pela lista de jogadas.
+  async function chamarRevanche() {
+    const e = T().estado();
+    if (S.chamando || S.fase !== "jogo" || !e || e.vencedor === null) return;
+    S.chamando = true; atualizarRevanche();
+    try {
+      const eu = S.config.jogadores[S.meuId], meu = S.assentos[eu.lugar] || {};
+      const cor = Number.isInteger(meu.cor) ? meu.cor : Number(lerGuardado(CHAVE_COR)) || 0;
+      const nova = await REDE.criarSala(limparNome(eu.nome) || "Jogador", cor,
+        { modo: S.config.modo, tamEquipe: S.meta.tamEquipe || S.config.tamEquipe, assentos: S.assentos, lugar: eu.lugar });
+      const gravou = await REDE.gravarAcao(S.codigo, S.log.length, { t: "revanche", a: S.meuId, sala: nova, id: idAleatorio() });
+      if (!gravou) { // alguém chamou antes: fica a sala dele (a jogada dele está chegando)
+        REDE.sairDoLobby(nova).catch(function () {});
+      }
+    } catch (x) {
+      S.chamando = false; atualizarRevanche();
+      falhou(x);
+    }
+  }
+
+  // Todos (e quem chegar depois pelo convite antigo) vão para a sala da revanche,
+  // de volta ao seu lugar.
+  function irParaRevanche(codigo) {
+    const eu = S.config && S.config.jogadores[S.meuId];
+    const lugar = eu ? eu.lugar : null;
+    const cor = eu && S.assentos && S.assentos[lugar] ? S.assentos[lugar].cor : null;
+    desligar();
+    if (T()) T().fimOnline();
+    entrar(codigo, lugar, cor).catch(function (x) {
+      guardar(CHAVE_SALA, null);
+      abrirEntrada({ erro: mensagem(x) });
     });
   }
 
@@ -697,7 +765,7 @@
     get ativo() { return S.fase === "jogo"; },
     get meuId() { return S.meuId; },
     abrirEntrada: abrirEntrada, preencherInicio: preencherInicio, aoAbrir: aoAbrir,
-    enviar: enviar, sinal: sinal, sair: sair,
+    enviar: enviar, sinal: sinal, sair: sair, atualizarRevanche: atualizarRevanche,
     estaOnline: function (id) { return S.fase !== "jogo" || estaOnline(id); },
     painelHtml: painelHtml, ligarPainel: ligarPainel,
     montarEstado: montarEstado, limparNome: limparNome,

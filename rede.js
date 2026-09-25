@@ -16,7 +16,8 @@
      membros/UID         true (quem entrou na sala)
      assentos/0..8       { tipo: humano|aberto|bot|vazio, uid, nome, cor, equipe, online }
      partida/config      { modo, tamEquipe, semente, jogadores: [{ nome, tipo, cor, uid, lugar }] }
-     acoes/0000000...    a lista de jogadas (motor.js: aplicarAcao), só se acrescenta
+     acoes/0000000...    a lista de jogadas (motor.js: aplicarAcao), só se acrescenta;
+                         no fim pode vir { t: "revanche", sala: NOVO } (todos vão para a sala nova)
      atividade/ID        último sinal de vida do jogador ID na vez dele
    As regras de segurança do banco estão em ferramentas/regras-firebase.json.
    ============================================================ */
@@ -101,7 +102,10 @@
   }
 
   // Cria a sala: quem cria fica no lugar 0 e manda na sala.
-  async function criarSala(nome, cor) {
+  // Revanche (opcoes): copia modo e lugares da sala anterior; quem chamou fica no
+  // mesmo lugar e os lugares das outras pessoas ficam abertos esperando por elas.
+  async function criarSala(nome, cor, opcoes) {
+    opcoes = opcoes || {};
     await init();
     let codigo = null;
     for (let t = 0; t < 6 && !codigo; t++) {
@@ -109,10 +113,16 @@
       if (!(await ref(sala(c) + "/meta").get()).exists()) codigo = c;
     }
     if (!codigo) throw new Error("Não deu para criar a sala. Tente de novo.");
-    const assentos = {};
-    for (let i = 0; i < LUGARES; i++) assentos[i] = { tipo: i === 0 ? "humano" : i < 4 ? "aberto" : "vazio" };
-    assentos[0] = { tipo: "humano", uid: uid, nome: nome, cor: cor, online: true };
-    const dados = { criadaEm: agora(), meta: { host: uid, status: "lobby", modo: "classico", tamEquipe: 2 }, assentos: assentos };
+    const assentos = {}, meuLugar = opcoes.lugar || 0;
+    for (let i = 0; i < LUGARES; i++) {
+      const a = opcoes.assentos && opcoes.assentos[i];
+      if (a) {
+        assentos[i] = { tipo: a.tipo === "humano" ? "aberto" : a.tipo };
+        if (Number.isInteger(a.equipe)) assentos[i].equipe = a.equipe;
+      } else assentos[i] = { tipo: i === 0 ? "humano" : i < 4 ? "aberto" : "vazio" };
+    }
+    assentos[meuLugar] = Object.assign(assentos[meuLugar], { tipo: "humano", uid: uid, nome: nome, cor: cor, online: true });
+    const dados = { criadaEm: agora(), meta: { host: uid, status: "lobby", modo: opcoes.modo || "classico", tamEquipe: opcoes.tamEquipe || 2 }, assentos: assentos };
     dados.membros = {}; dados.membros[uid] = true;
     await ref(sala(codigo)).set(dados);
     faxina();
@@ -135,9 +145,10 @@
     return lista;
   }
 
-  // Entra na sala: se já tem lugar (voltou), fica nele; senão ocupa o 1º aberto.
+  // Entra na sala: se já tem lugar (voltou), fica nele; senão ocupa o lugar
+  // preferido (o de antes, na revanche) se estiver aberto, ou o 1º aberto.
   // Devolve { lugar } ou lança um erro com mensagem para o jogador.
-  async function entrarSala(codigo, nome, corPreferida) {
+  async function entrarSala(codigo, nome, corPreferida, lugarPreferido) {
     await init();
     const s = await lerSala(codigo);
     if (!s) throw new Error("Sala " + codigo + " não encontrada. Confira o código.");
@@ -157,12 +168,15 @@
       const meu = lista.findIndex(function (a) { return a.uid === uid; });
       if (meu >= 0) { lugar = meu; lista[meu].online = true; return lista; }
       const maxLugar = s.meta.modo === "grande" ? LUGARES : 6;
-      const livre = lista.findIndex(function (a, i) { return i < maxLugar && a.tipo === "aberto"; });
+      const livre = lugarPreferido != null && lugarPreferido < maxLugar && lista[lugarPreferido].tipo === "aberto" ? lugarPreferido
+        : lista.findIndex(function (a, i) { return i < maxLugar && a.tipo === "aberto"; });
       if (livre < 0) { erro = "Não há lugar livre nessa sala."; return; }
       const usadas = lista.filter(function (a) { return a.tipo === "humano"; }).map(function (a) { return a.cor; });
       let cor = corPreferida;
       if (cor == null || usadas.indexOf(cor) !== -1) cor = [0, 1, 2, 3, 4, 5].filter(function (c) { return usadas.indexOf(c) === -1; })[0];
+      const eq = lista[livre].equipe; // a equipe montada para o lugar continua
       lista[livre] = { tipo: "humano", uid: uid, nome: nome, cor: cor, online: true };
+      if (Number.isInteger(eq)) lista[livre].equipe = eq;
       lugar = livre;
       return lista;
     });
@@ -191,10 +205,13 @@
     });
     presenca = { codigo: codigo, lugar: lugar, ref: conectado, fn: fn, meu: meu };
   }
-  function desligarPresenca() {
+  // Saindo de propósito (ou trocando de sala), o lugar fica "desconectado" na
+  // hora: o bot assume e a revanche não fica esperando por quem já foi.
+  function desligarPresenca(saindo) {
     if (!presenca) return;
     presenca.ref.off("value", presenca.fn);
     presenca.meu.onDisconnect().cancel().catch(function () {});
+    if (saindo) presenca.meu.set(false).catch(function () { /* a sala já não existe */ });
     presenca = null;
   }
 
@@ -265,7 +282,7 @@
   function desligar() {
     escutas.forEach(function (e) { e.ref.off(e.evento, e.fn); });
     escutas.length = 0;
-    desligarPresenca();
+    desligarPresenca(true);
   }
 
   function linkConvite(codigo) { return location.origin + location.pathname + "?sala=" + codigo; }

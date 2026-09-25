@@ -904,6 +904,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
 
   function mostrarVitoria() {
     const ov = document.getElementById("overlay");
+    if (ov.classList.contains("on") && ov.querySelector(".modalSala, .modalOnline")) return; // já foram para a revanche
     const v = estado.jogadores[estado.vencedor];
     const nomeV = nomeDe(estado.vencedor);
     const res = estado.resultado || { motivo: "regioes" };
@@ -963,9 +964,11 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         "<h2>" + titulo + "</h2>" +
         '<p class="lead">' + abertura + motivo + "</p>" +
         extra +
-        '<button class="primary" id="againBtn" style="width:100%">Jogar de novo</button>' +
+        (online ? '<div id="onRevancheBox"></div><button class="ghost" id="againBtn" style="width:100%">Voltar ao início</button>'
+          : '<button class="primary" id="againBtn" style="width:100%">Jogar de novo</button>') +
       "</div>";
     ov.classList.add("on");
+    if (online) window.ONLINE.atualizarRevanche();
     ov.querySelector("#againBtn").addEventListener("click", function () {
       if (online) window.ONLINE.sair();
       mostrarInicio();

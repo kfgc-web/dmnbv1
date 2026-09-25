@@ -21,7 +21,8 @@
    bots jogando sozinhos; dados à prova de trapaça (regras recusam jogada
    em nome de outro); quem cai vira bot e volta; botão do jogador parado;
    duas jogadas ao mesmo tempo; Equipes montadas na sala; Grande Exército
-   com reino escolhido; e a partida sozinho continua sem internet.
+   com reino escolhido; revanche (todos voltam à sala, mesmos lugares);
+   e a partida sozinho continua sem internet.
    ============================================================ */
 "use strict";
 const fs = require("fs");
@@ -465,6 +466,56 @@ async function nLugaresHumanos(p) {
     checar("Grande Exército: mesma partida nos dois aparelhos", await sincronizar([pg1, pg2]));
     await print(pg2, "online-grande");
     checar("nenhum erro no console (Equipes e Grande Exército)", E1.erros.concat(E2.erros, G1.erros, G2.erros).length === 0, E1.erros.concat(E2.erros, G1.erros, G2.erros).join(" | "));
+
+    // ---------- revanche ----------
+    console.log("\nRevanche na mesma turma");
+    const R1 = await aparelho(browser), R2 = await aparelho(browser), R3 = await aparelho(browser);
+    const sr = await criarSala(R1, "Hugo");
+    const pr1 = sr.p, pr2 = await entrarPeloConvite(R2, sr.codigo, "Iris");
+    let pr3 = await entrarPeloConvite(R3, sr.codigo, "Joca");
+    await pr2.click('.salaCor[data-cor="3"]');
+    await pr1.click('.modoOpcao[data-modo="dominio"]');
+    await esperar(pr1, function () { return document.querySelectorAll(".salaTipo").length && document.body.innerText.indexOf("Joca") >= 0; });
+    await pr1.click('.salaTipo[data-i="3"]'); // lugar 3: bot
+    await esperar(pr1, function () { return document.querySelectorAll(".salaLugar")[3].innerText.indexOf("Bot") >= 0; });
+    await pr1.click("#salaComecar");
+    const rComecou = await esperar(pr2, function () { return !!window.__e && !!window.__e(); }) && await esperar(pr3, function () { return !!window.__e && !!window.__e(); });
+    checar("partida da revanche começa", rComecou);
+    // fim de jogo (forçado aqui em cada aparelho, para não jogar a partida inteira)
+    const acabar = function (p) { return p.evaluate(function () { const e = window.__e(); e.vencedor = 0; e.resultado = { motivo: "ultimo" }; window.TELAS.render(); }); };
+    await Promise.all([acabar(pr1), acabar(pr2), acabar(pr3)]);
+    checar("no fim, quem criou a sala vê 'Jogar de novo'", await esperar(pr1, function () { return !!document.querySelector("#onRevanche"); }, null, 5000));
+    checar("os outros veem que Hugo vai chamar a revanche",
+      await esperar(pr2, function () { const b = document.querySelector("#onRevancheBox"); return !!b && b.innerText.indexOf("Esperando Hugo") >= 0; }, null, 5000));
+    await pr3.close(); // Joca fecha o app antes da revanche
+    await pr1.click("#onRevanche");
+    const lobby = function (p) { return esperar(p, function (antigo) { const c = document.querySelector(".salaCodigo"); return !!c && c.textContent !== antigo; }, sr.codigo, 15000); };
+    checar("todos voltam juntos para a sala (código novo)", await lobby(pr1) && await lobby(pr2));
+    const novo = await pr1.$eval(".salaCodigo", function (e) { return e.textContent; });
+    checar("os dois estão na mesma sala", (await pr2.$eval(".salaCodigo", function (e) { return e.textContent; })) === novo, novo);
+    await esperar(pr1, function () { return document.querySelectorAll(".salaLugar")[1].innerText.indexOf("Iris") >= 0; });
+    const lugaresR = await pr1.$$eval(".salaLugar", function (x) { return x.map(function (e) { return e.innerText.replace(/\s+/g, " ").trim(); }); });
+    checar("mesmos lugares: Hugo, Iris, Joca (aberto, esperando), bot",
+      lugaresR[0].indexOf("Hugo") >= 0 && lugaresR[1].indexOf("Iris") >= 0 && lugaresR[2].indexOf("Lugar aberto") >= 0 && lugaresR[3].indexOf("Bot") >= 0, lugaresR.slice(0, 4).join(" | "));
+    checar("mesmo modo (Domínio)", await pr1.$eval('.modoOpcao[data-modo="dominio"]', function (b) { return b.classList.contains("sel"); }));
+    checar("Iris continua com a cor dela e pode trocar", await pr2.$eval('.salaCor[data-cor="3"]', function (b) { return b.classList.contains("sel"); }) &&
+      !(await pr2.$eval('.salaCor[data-cor="4"]', function (b) { return b.disabled; })));
+    // Joca abre o app de novo: a sala antiga leva direto para a revanche, no lugar dele
+    pr3 = await R3.abrir();
+    checar("quem estava fora volta direto para a sala da revanche, no mesmo lugar",
+      await esperar(pr3, function (c) { const x = document.querySelector(".salaCodigo"); return !!x && x.textContent === c && document.querySelectorAll(".salaLugar")[2].classList.contains("eu"); }, novo, 15000));
+    await pr1.click("#salaComecar");
+    checar("a revanche começa nos três aparelhos", await esperar(pr3, function () { return !!window.__e && !!window.__e() && window.__e().vencedor === null; }) &&
+      await sincronizar([pr1, pr2, pr3]));
+    await print(pr2, "online-revanche");
+    // de novo no fim, mas agora quem criou a sala vai embora: quem sobrou chama a revanche
+    await Promise.all([acabar(pr1), acabar(pr2), acabar(pr3)]);
+    await esperar(pr1, function () { return !!document.querySelector("#againBtn"); }, null, 5000);
+    await pr1.click("#againBtn");
+    const outroChama = await esperar(pr2, function () { return !!document.querySelector("#onRevanche"); }, null, 8000) ||
+      await esperar(pr3, function () { return !!document.querySelector("#onRevanche"); }, null, 2000);
+    checar("se quem criou a sala foi embora, outro da mesa ganha o 'Jogar de novo'", outroChama);
+    checar("nenhum erro no console (revanche)", R1.erros.concat(R2.erros, R3.erros).length === 0, R1.erros.concat(R2.erros, R3.erros).join(" | "));
 
     // ---------- celular deitado: a sala cabe ----------
     const M = await aparelho(browser, { width: 844, height: 390 });

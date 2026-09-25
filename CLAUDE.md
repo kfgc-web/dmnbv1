@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (online testado por Kauã; README, LICENSE, DESIGN.md e aviso de ©).
+Última atualização: 25/09/2026 (revanche na mesma sala; tutorial definido com Kauã).
 
 ---
 
@@ -68,7 +68,8 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Equipes online:** quem criou a sala **monta as equipes** (toca nas letras A/B/C) ou toca em **Sortear**; o jogo sorteia a ordem, alternando as equipes.
 - **Quem caiu** (desconectado): na vez dele, depois de **10 s**, o bot joga **aquele turno**. Voltou (abrir o app de novo já volta sozinho para a partida), joga o próximo normalmente.
 - **Quem está conectado mas parado:** depois de **60 s sem nenhum toque** na vez dele, quem criou a sala (se estiver fora, o "juiz") vê o botão **"Bot joga por Fulano"** — só aquele turno. Qualquer toque zera a contagem. Nada é automático sem o toque de quem criou.
-- Sair no meio (Novo jogo → Sair): a partida continua com o bot; a tela de início oferece **"Voltar para a partida online"** (não volta sozinho).
+- Sair no meio (Novo jogo → Sair): a partida continua com o bot (o lugar fica "desconectado" na hora); a tela de início oferece **"Voltar para a partida online"** (não volta sozinho).
+- **Revanche:** no fim, quem criou a sala (se tiver ido embora, o juiz) vê **"Jogar de novo"**; os outros veem "Esperando Fulano chamar a revanche…". Todos voltam juntos para a sala, com o mesmo modo, os mesmos lugares e cores (cada um pode trocar a cor e o criador ajusta o que quiser). Quem não estava lá fica com o lugar aberto e, ao reabrir o app ou o convite antigo, cai direto no seu lugar. Sem placar da sala (decisão de Kauã). Por dentro: nasce uma **sala nova** (código novo) e a jogada `{ t: "revanche", sala }` na lista da antiga leva todos para ela — assim não precisou mudar as regras do banco.
 - Limite aceito por Kauã: quem fuçar o navegador consegue espiar objetivos e cartas dos outros (esconder de verdade exigiria servidor pago). Dados e jogadas **não** dá para falsificar.
 
 ### Objetivos do Clássico (17, aprovados por Kauã)
@@ -203,8 +204,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 12. **Online com amigos** (Firebase `domination-britannia`): sala com código e convite, cor escolhida, equipes montadas na sala, reino escolhido no Grande Exército, partida guardada como lista de jogadas com sorte combinada (motor com `sorte(estado)`), bots pelo juiz, quem cai vira bot em 10 s, botão do parado (60 s), volta sozinho ao reabrir o app.
 13. **Autoria:** README (PT + EN, com prints), LICENSE proprietário, aviso de © no início, DESIGN.md com o registro das decisões de Kauã e `historico/` com os documentos de julho. Online testado por Kauã ("aparentemente funciona"). Grande Exército: descrição explica os pontos e o dilema de atacar os aliados; reinos-bots passam a revidar.
 
+14. **Revanche na mesma sala** (online).
+
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
-2. **Online** — entregue (histórico 12) e testado por Kauã. Ideias para depois: revanche na mesma sala, bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
-3. Ideia anotada: **salvar a partida sozinho** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida contra bots; a online já sobrevive).
+2. **Online** — entregue (histórico 12) e testado por Kauã; revanche entregue (histórico 14). Ideias para depois: bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
+3. **Modo Tutorial** — definido com Kauã, em construção: você contra 3 bots com ~70% da esperteza; começo e dados sorteados; objetivo = 3 regiões à escolha; 1º turno guiado passo a passo por balões (só dá para fazer o que o balão pede), depois livre com balões na 1ª vez de cada novidade; completo ao fazer a 1ª troca de cartas (tela "Parabéns… pronto para combater os Vikings!" com Continuar jogando / Voltar à tela inicial); botões "Pular tutorial" e "Dicas"; primeiro na lista com "Novo no jogo? Comece aqui". Textos dos balões: ver DESIGN.md.
+4. Ideias anotadas (sem pressa, Kauã não achou necessárias por ora): **salvar a partida sozinho**, estatísticas; som e música, bate-papo (analisar depois); objetivos do tipo "3 regiões à escolha" no Clássico.
