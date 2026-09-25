@@ -186,6 +186,13 @@
   .trocaAcoes{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
   @media (max-width:520px){ .cartaBtn{ width:96px; } .modal.modalCartas{ padding:18px; } }
 
+  /* ---------- conquista: quantos entram ---------- */
+  .modal.modalConquista{ max-width:380px; }
+  .modal .lead b{ color:var(--bone); }
+  .conqLinha{ display:flex; align-items:center; justify-content:center; gap:8px; margin:0 0 10px; }
+  .conqQtd{ font-size:28px; font-weight:700; min-width:48px; text-align:center; font-variant-numeric:tabular-nums; color:#ece5d4; }
+  .conqResto{ text-align:center; font-size:13px; color:var(--muted); margin:0 0 18px; font-variant-numeric:tabular-nums; }
+
   /* ---------- toast ---------- */
   #toast{
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%);

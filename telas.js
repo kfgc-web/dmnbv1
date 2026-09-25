@@ -28,6 +28,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   let destinoSel = null;        // destino escolhido (remanejamento)
   let qtdMover = 1;
   let animando = false;         // true enquanto bots jogam (trava cliques)
+  let escolhendoConquista = false; // true entre a conquista e a janela de "quantos entram"
   let zoom = 1;
 
   // refs de elementos SVG por território
@@ -290,7 +291,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function renderAcoes(minhaVez) {
     const box = document.getElementById("actions");
     box.innerHTML = "";
-    if (!minhaVez) return;
+    if (!minhaVez || escolhendoConquista) return;
     // Fase de reforço: sem botão — quando o total zera, a tela avança sozinha (3.4-bis).
     if (estado.fase === "ataque") {
       box.appendChild(botao("Terminar ataque", "", acaoTerminarAtaque));
@@ -298,6 +299,51 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     } else if (estado.fase === "remanejamento") {
       box.appendChild(botao("Passar vez", "primary", acaoPassar));
     }
+  }
+
+  // -------- conquista: quantos exércitos entram --------
+  function abrirConquista(r, origem, destino) {
+    const ov = document.getElementById("overlay");
+    if (!estado.conquista) { escolhendoConquista = false; render(); return; }
+    const max = r.podeFicarAte;
+    let qtd = Math.min(max, Math.max(1, r.dadosAtaque.length));
+    ov.innerHTML =
+      '<div class="modal modalConquista">' +
+        "<h2>" + destino + " é seu!</h2>" +
+        '<p class="lead">Quantos exércitos entram vindos de <b>' + origem + "</b>? Pode ser de 1 a " + max +
+          " (sempre fica 1 em " + origem + ").</p>" +
+        '<div class="conqLinha">' +
+          '<button class="ghost" id="conqMin">Mín.</button>' +
+          '<button class="iconbtn" id="conqMenos" aria-label="Menos">−</button>' +
+          '<span class="qty conqQtd" id="conqQtd"></span>' +
+          '<button class="iconbtn" id="conqMais" aria-label="Mais">+</button>' +
+          '<button class="ghost" id="conqMax">Máx.</button>' +
+        "</div>" +
+        '<p class="conqResto" id="conqResto"></p>' +
+        '<button class="primary" id="conqOk" style="width:100%">Confirmar</button>' +
+      "</div>";
+    ov.classList.add("on");
+    function atualizar() {
+      ov.querySelector("#conqQtd").textContent = qtd;
+      const fica = estado.territorios[origem].exercitos + estado.territorios[destino].exercitos - qtd;
+      ov.querySelector("#conqResto").textContent = destino + ": " + qtd + " · " + origem + ": " + fica;
+    }
+    function muda(v) { qtd = Math.max(1, Math.min(max, v)); atualizar(); }
+    ov.querySelector("#conqMin").addEventListener("click", function () { muda(1); });
+    ov.querySelector("#conqMax").addEventListener("click", function () { muda(max); });
+    ov.querySelector("#conqMenos").addEventListener("click", function () { muda(qtd - 1); });
+    ov.querySelector("#conqMais").addEventListener("click", function () { muda(qtd + 1); });
+    ov.querySelector("#conqOk").addEventListener("click", function () {
+      const m = moverNaConquista(estado, qtd);
+      if (!m.ok) return toast(m.erro);
+      ov.classList.remove("on");
+      escolhendoConquista = false;
+      // segue atacando da origem, se ainda der
+      const o = estado.territorios[origem];
+      selecao = (o.exercitos >= 2 && inimigosVizinhos(estado, origem).length > 0) ? origem : null;
+      render();
+    });
+    atualizar();
   }
 
   // -------- cartas (painel + janela de troca) --------
@@ -450,7 +496,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
 
   // -------- cliques no território --------
   function onClick(t) {
-    if (animando || estado.vencedor !== null) return;
+    if (animando || escolhendoConquista || estado.vencedor !== null) return;
     if (estado.jogadores[estado.vez].tipo !== "humano") return;
     if (estado.fase === "reforco") cliqueReforco(t);
     else if (estado.fase === "ataque") cliqueAtaque(t);
@@ -501,10 +547,17 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   function executarAtaque(origem, destino) {
-    const r = atacar(estado, origem, destino);
+    const r = atacar(estado, origem, destino, { escolher: true });
     if (!r.ok) return toast(r.erro);
     mostrarDados(r, origem, destino);
     if (estado.vencedor !== null) { render(); setTimeout(mostrarVitoria, 900); return; }
+    if (estado.conquista) {
+      // conquistou e sobrou tropa na origem: o jogador escolhe quantos entram
+      selecao = null; render();
+      escolhendoConquista = true;
+      setTimeout(function () { abrirConquista(r, origem, destino); }, 700);
+      return;
+    }
     // mantém atacando da origem, se ainda der
     if (estado.territorios[origem].dono !== HUMANO || estado.territorios[origem].exercitos < 2) selecao = null;
     else selecao = origem;
@@ -689,7 +742,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     const jogadores = [{ nome: "Você", tipo: "humano" }];
     for (let i = 1; i <= nBots; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
     estado = criarPartida(jogadores);
-    selecao = null; destinoSel = null; animando = false;
+    selecao = null; destinoSel = null; animando = false; escolhendoConquista = false;
     document.getElementById("overlay").classList.remove("on");
     render();
     if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
