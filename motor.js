@@ -15,7 +15,7 @@
    Não altere a lógica aqui sem reexecutar os testes.
    ------------------------------------------------------------
    API PÚBLICA (os "verbos" do jogo):
-     criarPartida(jogadores)            -> cria a partida pronta
+     criarPartida(jogadores, opcoes)    -> cria a partida pronta (opcoes.modo: "classico" | "dominio" | "total")
      calcularReforcos(estado, id)       -> detalha reforços { base, porRegiao, ordem, total }
      posicionarReforco(estado, t, qtd)  -> põe reforços num território (respeita a restrição de região)
      terminarReforco(estado)            -> fecha reforços, abre ataque
@@ -30,12 +30,15 @@
      territoriosDe, contarExercitos, regioesDominadas,
      inimigosVizinhos, ehFronteira, frescosEm, jogadoresVivos,
      verificarVitoria, resumoJogadores,
-     acharTroca, trocaValida, valorDaTroca, simboloDoTerritorio
+     acharTroca, trocaValida, valorDaTroca, simboloDoTerritorio,
+     objetivoCumprido, objetivoEfetivo, descreverObjetivo
 
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
      estado = {
        territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
-       jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ] }, ... ],
+       modo:        "dominio",        // "classico" (objetivos) | "dominio" (5 regiões) | "total" (último de pé)
+       jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ],
+                        objetivo (só no clássico), eliminadoPor (id de quem o eliminou) }, ... ],
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
        fase:              "reforco",    // reforco|ataque|remanejamento|fim
@@ -87,6 +90,48 @@ const CORINGAS = 2;
 const VALORES_TROCA = [4, 6, 8, 10, 12, 15, 18, 20];
 const BONUS_TERRITORIO_TROCA = 2; // carta trocada de território seu: +2 nele
 const CARTAS_TROCA_OBRIGATORIA = 5; // com 5+ na mão, troca antes de posicionar
+
+// MODOS DE JOGO
+//   classico: cada um recebe um OBJETIVO secreto; vence quem cumprir o seu,
+//             na hora, durante o próprio turno.
+//   dominio:  vence quem tiver 5 das 8 regiões inteiras (checado no fim do turno).
+//   total:    só vence o último de pé.
+// Em todos os modos, sobrar um único jogador vivo também é vitória.
+const MODOS = {
+  classico: { nome: "Clássico", resumo: "Cada um recebe um objetivo secreto. Vence quem cumprir o seu primeiro." },
+  dominio:  { nome: "Domínio", resumo: "Vence quem dominar 5 das 8 regiões inteiras." },
+  total:    { nome: "Conquista Total", resumo: "Só vence o último de pé. Partida longa." },
+};
+const MODO_PADRAO = "dominio";
+
+// OBJETIVOS do modo Clássico (nomes de época; aprovados por Kauã).
+//   regioes: dominar todas as regiões da lista (+ "extra" regiões quaisquer).
+//   territorios: ter pelo menos "qtd" territórios.
+//   territorios2: ter pelo menos "qtd" territórios com "min"+ exércitos em cada.
+//   destruir: eliminar o jogador do assento "alvo" (cor). Se esse assento não
+//     estiver na partida, for você mesmo, ou outro jogador eliminá-lo antes,
+//     o objetivo vira OBJETIVO_RESERVA (conquistar 36 territórios).
+const OBJETIVO_RESERVA = { tipo: "territorios", qtd: 36 };
+const NOMES_COR = ["vermelho", "azul", "verde", "âmbar", "roxo", "turquesa"];
+const OBJETIVOS = [
+  { id: "alto-rei", nome: "Alto-Rei da Irlanda", tipo: "regioes", regioes: ["Ériu", "Dál Riata"], extra: 0 },
+  { id: "rota-dyflin", nome: "Rota de Dyflin", tipo: "regioes", regioes: ["Ériu", "Cymru"], extra: 0 },
+  { id: "grande-exercito", nome: "Caminho do Grande Exército", tipo: "regioes", regioes: ["Northhymbre", "Mierce"], extra: 0 },
+  { id: "sonho-alfredo", nome: "Sonho de Alfredo", tipo: "regioes", regioes: ["Westseaxe", "Mierce"], extra: 0 },
+  { id: "senhor-norte", nome: "Senhor do Norte", tipo: "regioes", regioes: ["Northhymbre", "Alba"], extra: 0 },
+  { id: "terras-offa", nome: "Terras de Offa", tipo: "regioes", regioes: ["Mierce", "East Engle", "Cymru"], extra: 0 },
+  { id: "bretwalda-sul", nome: "Bretwalda do Sul", tipo: "regioes", regioes: ["Westseaxe", "East Engle", "Cymru"], extra: 0 },
+  { id: "reino-alba", nome: "Reino de Alba", tipo: "regioes", regioes: ["Alba", "Dál Riata"], extra: 1 },
+  { id: "eoforwic-lundenburg", nome: "De Eoforwic a Lundenburg", tipo: "regioes", regioes: ["Northhymbre", "Westseaxe"], extra: 0 },
+  { id: "bretwalda", nome: "Bretwalda", tipo: "territorios", qtd: 36 },
+  { id: "terra-assentada", nome: "Terra Assentada", tipo: "territorios2", qtd: 27, min: 2 },
+  { id: "rixa-0", nome: "Rixa de Sangue", tipo: "destruir", alvo: 0 },
+  { id: "rixa-1", nome: "Rixa de Sangue", tipo: "destruir", alvo: 1 },
+  { id: "rixa-2", nome: "Rixa de Sangue", tipo: "destruir", alvo: 2 },
+  { id: "rixa-3", nome: "Rixa de Sangue", tipo: "destruir", alvo: 3 },
+  { id: "rixa-4", nome: "Rixa de Sangue", tipo: "destruir", alvo: 4 },
+  { id: "rixa-5", nome: "Rixa de Sangue", tipo: "destruir", alvo: 5 },
+];
 
 // Cor de cada assento (até 6 jogadores).
 const CORES = ["#c0392b", "#2c6fbb", "#27ae60", "#e0a200", "#8e44ad", "#16a085"];
@@ -189,9 +234,80 @@ function jogadoresVivos(estado) {
   return estado.jogadores.filter(function (j) { return j.vivo; });
 }
 
-// O jogador tem 5+ regiões inteiras? (condição de vitória da v1)
+// O jogador já cumpriu a condição de vitória do modo? (fora "último de pé",
+// que vale em todos os modos e é checado à parte)
 function verificarVitoria(estado, idJogador) {
+  const modo = estado.modo || MODO_PADRAO;
+  if (modo === "total") return false;
+  if (modo === "classico") return objetivoCumprido(estado, idJogador);
   return regioesDominadas(estado, idJogador).length >= REGIOES_PARA_VENCER;
+}
+
+// O objetivo que VALE agora para o jogador (a "Rixa de Sangue" vira o
+// objetivo reserva quando o alvo não existe, é ele mesmo, ou foi eliminado
+// por outro).
+function objetivoEfetivo(estado, idJogador) {
+  const obj = estado.jogadores[idJogador].objetivo;
+  if (!obj) return null;
+  if (obj.tipo !== "destruir") return obj;
+  const alvo = estado.jogadores[obj.alvo];
+  if (!alvo || obj.alvo === idJogador) return OBJETIVO_RESERVA;
+  if (!alvo.vivo && alvo.eliminadoPor !== idJogador) return OBJETIVO_RESERVA;
+  return obj;
+}
+
+// O jogador cumpriu o seu objetivo (modo Clássico)?
+function objetivoCumprido(estado, idJogador) {
+  const obj = objetivoEfetivo(estado, idJogador);
+  if (!obj || !estado.jogadores[idJogador].vivo) return false;
+  if (obj.tipo === "regioes") {
+    const dom = regioesDominadas(estado, idJogador);
+    if (!obj.regioes.every(function (r) { return dom.indexOf(r) !== -1; })) return false;
+    const outras = dom.filter(function (r) { return obj.regioes.indexOf(r) === -1; }).length;
+    return outras >= (obj.extra || 0);
+  }
+  if (obj.tipo === "territorios") return territoriosDe(estado, idJogador).length >= obj.qtd;
+  if (obj.tipo === "territorios2") {
+    return territoriosDe(estado, idJogador).filter(function (t) {
+      return estado.territorios[t].exercitos >= obj.min;
+    }).length >= obj.qtd;
+  }
+  if (obj.tipo === "destruir") {
+    const alvo = estado.jogadores[obj.alvo];
+    return !alvo.vivo && alvo.eliminadoPor === idJogador;
+  }
+  return false;
+}
+
+// Texto do objetivo para mostrar na tela: { nome, texto, reserva }.
+function descreverObjetivo(estado, idJogador) {
+  const obj = estado.jogadores[idJogador].objetivo;
+  if (!obj) return null;
+  const ef = objetivoEfetivo(estado, idJogador);
+  const texto = function (o) {
+    if (o.tipo === "regioes") {
+      return "Conquistar " + o.regioes.join(" e ") + " inteiras" +
+        (o.extra ? ", mais " + o.extra + " região à sua escolha" : "") + ".";
+    }
+    if (o.tipo === "territorios") return "Conquistar " + o.qtd + " territórios.";
+    if (o.tipo === "territorios2") return "Conquistar " + o.qtd + " territórios com pelo menos " + o.min + " exércitos em cada.";
+    if (o.tipo === "destruir") return "Eliminar o jogador " + NOMES_COR[o.alvo] + ".";
+    return "";
+  };
+  const reserva = ef !== obj;
+  return {
+    nome: reserva ? "Bretwalda" : obj.nome,
+    texto: reserva ? "Conquistar " + OBJETIVO_RESERVA.qtd + " territórios. (Sua Rixa de Sangue não vale mais: " +
+      "o alvo não está na partida, é você, ou foi eliminado por outro.)" : texto(obj),
+    original: obj.nome + ": " + texto(obj),
+    reserva: reserva,
+  };
+}
+
+// Modo Clássico: vitória NA HORA, durante o turno do jogador da vez.
+function checarObjetivo(estado) {
+  if ((estado.modo || MODO_PADRAO) !== "classico" || estado.vencedor !== null) return;
+  if (objetivoCumprido(estado, estado.vez)) declararVitoria(estado, estado.vez);
 }
 
 // Símbolo da carta de um território (fixo: segue a ordem de mapa.js,
@@ -279,10 +395,13 @@ function declararVitoria(estado, idJogador) {
    ---------------------------------------------------------------- */
 // "jogadores" é uma lista de { nome, tipo } — tipo "humano" ou "bot".
 // Recomendado de 4 a 6, mas funciona de 2 a 6 (bom pra testar).
-function criarPartida(jogadores) {
+function criarPartida(jogadores, opcoes) {
+  opcoes = opcoes || {};
   const n = jogadores.length;
+  const modo = MODOS[opcoes.modo] ? opcoes.modo : MODO_PADRAO;
 
   const estado = {
+    modo: modo,
     territorios: {},
     jogadores: jogadores.map(function (j, i) {
       return {
@@ -292,6 +411,7 @@ function criarPartida(jogadores) {
         cor: j.cor || CORES[i % CORES.length],
         vivo: true,
         cartas: [],
+        eliminadoPor: null,
       };
     }),
     vez: 0,
@@ -323,12 +443,18 @@ function criarPartida(jogadores) {
   for (let c = 0; c < CORINGAS; c++) cartas.push({ t: null, s: "coringa" });
   estado.baralho = embaralhar(cartas);
 
+  // Clássico: cada jogador recebe um objetivo secreto diferente.
+  if (modo === "classico") {
+    const objs = embaralhar(OBJETIVOS);
+    estado.jogadores.forEach(function (j, i) { j.objetivo = objs[i]; });
+  }
+
   // Primeiro turno já montado: o jogador 0 recebe seu lote de reforços
   // (base = territórios ÷ 3, mínimo 3; + bônus por região completa) para posicionar.
   const det0 = calcularReforcos(estado, 0);
   estado.reforco = { base: det0.base, porRegiao: det0.porRegiao, ordem: det0.ordem };
   estado.reforcosPendentes = det0.total;
-  anotar(estado, "Partida criada. Territórios distribuídos.");
+  anotar(estado, "Partida criada (modo " + MODOS[modo].nome + "). Territórios distribuídos.");
   return estado;
 }
 
@@ -406,6 +532,7 @@ function posicionarReforco(estado, territorio, qtd) {
   alvo.exercitos += qtd;
   estado.reforcosPendentes -= qtd;
   estado.ultimoEvento = { tipo: "reforco", territorio: territorio, qtd: qtd, restante: estado.reforcosPendentes };
+  checarObjetivo(estado);
   return { ok: true, restante: estado.reforcosPendentes };
 }
 
@@ -468,6 +595,7 @@ function trocarCartas(estado, indices) {
   anotar(estado, j.nome + " trocou cartas: +" + valor + " exércitos" +
     (bonusEm.length ? " (+" + BONUS_TERRITORIO_TROCA + " em " + bonusEm.join(", ") + ")" : "") + ".");
   estado.ultimoEvento = { tipo: "troca", valor: valor, bonusEm: bonusEm };
+  checarObjetivo(estado);
   return { ok: true, valor: valor, bonusEm: bonusEm, proxima: valorDaTroca(estado.trocasFeitas) };
 }
 
@@ -553,6 +681,7 @@ function atacar(estado, origem, destino, opcoes) {
     marcarEliminados(estado);
     // Quem elimina um jogador fica com as cartas dele.
     const vitima = estado.jogadores[donoAntigo];
+    if (!vitima.vivo && vitima.eliminadoPor == null) vitima.eliminadoPor = estado.vez;
     if (!vitima.vivo && vitima.cartas && vitima.cartas.length) {
       const herdadas = vitima.cartas.length;
       estado.jogadores[estado.vez].cartas = estado.jogadores[estado.vez].cartas.concat(vitima.cartas);
@@ -562,6 +691,7 @@ function atacar(estado, origem, destino, opcoes) {
     // Se sobrou um só jogador vivo, a partida acaba na hora.
     if (jogadoresVivos(estado).length === 1)
       declararVitoria(estado, jogadoresVivos(estado)[0].id);
+    else checarObjetivo(estado);
   }
 
   estado.ultimoEvento = {
@@ -594,6 +724,7 @@ function moverNaConquista(estado, total) {
   d.exercitos += extra;
   estado.conquista = null;
   estado.ultimoEvento = { tipo: "conquistaMovida", origem: c.origem, destino: c.destino, total: total };
+  checarObjetivo(estado);
   return { ok: true, origem: c.origem, destino: c.destino, total: total };
 }
 
@@ -649,6 +780,7 @@ function remanejar(estado, origem, destino, qtd) {
   // (só saíram exércitos frescos; os já-travados continuam contados lá).
   estado.movidos[destino] = ((estado.movidos && estado.movidos[destino]) || 0) + qtd;
   estado.ultimoEvento = { tipo: "remanejo", origem: origem, destino: destino, qtd: qtd };
+  checarObjetivo(estado);
   return { ok: true };
 }
 
@@ -670,7 +802,7 @@ function passarVez(estado) {
   if (estado.conquistouNoTurno) carta = comprarCarta(estado, estado.vez);
   estado.conquistouNoTurno = false;
 
-  // Vitória do jogador da vez? (5+ regiões inteiras agora)
+  // Vitória do jogador da vez? (pela condição do modo: 5 regiões ou objetivo)
   if (verificarVitoria(estado, estado.vez)) {
     declararVitoria(estado, estado.vez);
     return { ok: true, vencedor: estado.vez, carta: carta };

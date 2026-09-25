@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
 <!-- ?v=N: número de versão. Aumente a cada atualização para o navegador
      buscar os arquivos novos em vez de usar a cópia guardada. -->
-<link rel="stylesheet" href="estilo.css?v=6">
+<link rel="stylesheet" href="estilo.css?v=7">
 </head>
 <body>
 <div id="app">
@@ -21,6 +21,7 @@
     <div class="tool">
       <button class="iconbtn ghost" id="zoomOut" title="Diminuir">−</button>
       <button class="iconbtn ghost" id="zoomIn" title="Ampliar">+</button>
+      <button class="ghost" id="painelBtn" aria-controls="panel">Painel ▴</button>
       <button class="ghost" id="newGame">Novo jogo</button>
     </div>
   </header>
@@ -45,6 +46,8 @@
       </div>
 
       <div class="actions" id="actions"></div>
+
+      <div class="objetivobox" id="objetivoBox"></div>
 
       <div class="cartasbox" id="cartasBox"></div>
 
@@ -72,11 +75,11 @@
 <div id="overlay"></div>
 <div id="toast"></div>
 
-<script src="mapa.js?v=6"></script>
-<script src="motor.js?v=6"></script>
-<script src="bots.js?v=6"></script>
-<script src="desenho.js?v=6"></script>
-<script src="cartas.js?v=6"></script>
-<script src="telas.js?v=6"></script>
+<script src="mapa.js?v=7"></script>
+<script src="motor.js?v=7"></script>
+<script src="bots.js?v=7"></script>
+<script src="desenho.js?v=7"></script>
+<script src="cartas.js?v=7"></script>
+<script src="telas.js?v=7"></script>
 </body>
 </html>

@@ -275,10 +275,12 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     }
 
     renderAcoes(minhaVez);
+    renderObjetivo();
     renderCartas(minhaVez);
     renderMover(minhaVez);
     renderPlayers();
     renderLog();
+    if (estado.vencedor !== null && !animando) agendarVitoria(900);
   }
 
   function botao(label, cls, fn, disabled) {
@@ -299,6 +301,26 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     } else if (estado.fase === "remanejamento") {
       box.appendChild(botao("Passar vez", "primary", acaoPassar));
     }
+  }
+
+  // -------- modo + objetivo secreto (painel) --------
+  let objetivoOculto = false;
+  function renderObjetivo() {
+    const box = document.getElementById("objetivoBox");
+    let html = '<div class="cartashead"><h3>Modo: ' + MODOS[estado.modo].nome + "</h3>";
+    const d = estado.modo === "classico" ? descreverObjetivo(estado, HUMANO) : null;
+    if (d) html += '<button class="ghost mini" id="objBtn">' + (objetivoOculto ? "Mostrar" : "Esconder") + "</button>";
+    html += "</div>";
+    if (d) {
+      html += objetivoOculto
+        ? '<p class="objTexto oculto">Seu objetivo está escondido.</p>'
+        : '<p class="objNome">' + d.nome + '</p><p class="objTexto">' + d.texto + "</p>";
+    } else {
+      html += '<p class="objTexto">' + MODOS[estado.modo].resumo + "</p>";
+    }
+    box.innerHTML = html;
+    const b = box.querySelector("#objBtn");
+    if (b) b.addEventListener("click", function () { objetivoOculto = !objetivoOculto; renderObjetivo(); });
   }
 
   // -------- conquista: quantos exércitos entram --------
@@ -534,7 +556,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     const r = atacar(estado, origem, destino, { escolher: true });
     if (!r.ok) return toast(r.erro);
     mostrarDados(r, origem, destino);
-    if (estado.vencedor !== null) { render(); setTimeout(mostrarVitoria, 900); return; }
+    if (estado.vencedor !== null) { render(); agendarVitoria(900); return; }
     if (estado.conquista) {
       // conquistou e sobrou tropa na origem: o jogador escolhe quantos entram
       selecao = null; render();
@@ -592,7 +614,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // -------- fim de turno / bots --------
   function depoisDoTurno() {
     render();
-    if (estado.vencedor !== null) { setTimeout(mostrarVitoria, 700); return; }
+    if (estado.vencedor !== null) { agendarVitoria(700); return; }
     if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
   }
 
@@ -614,7 +636,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function rodarBots() {
     animando = true; selecao = null; destinoSel = null; render();
     function passo() {
-      if (estado.vencedor !== null) { animando = false; render(); setTimeout(mostrarVitoria, 400); return; }
+      if (estado.vencedor !== null) { animando = false; render(); agendarVitoria(400); return; }
       if (estado.jogadores[estado.vez].tipo === "bot") {
         const antes = snapshot();
         jogarTurnoBot(estado);
@@ -674,14 +696,19 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // -------- modais --------
   function mostrarInicio() {
     const ov = document.getElementById("overlay");
+    let modo = "classico";
+    const opcoesModo = Object.keys(MODOS).map(function (m) {
+      return '<button class="modoOpcao" data-modo="' + m + '" aria-pressed="false"><b>' + MODOS[m].nome + "</b><span>" + MODOS[m].resumo + "</span></button>";
+    }).join("");
     ov.innerHTML =
-      '<div class="modal">' +
+      '<div class="modal modalInicio">' +
         "<h2>Domination: Britannia</h2>" +
         '<p class="lead">Conquiste a ilha. Cada território começa com 1 exército; no seu turno você recebe reforços, ataca e (se quiser) remaneja, depois passa a vez.</p>' +
+        '<div class="flabel" style="margin-bottom:8px">Modo de jogo</div>' +
+        '<div class="modos">' + opcoesModo + "</div>" +
         '<div class="rules">' +
-          "Vença dominando <b>5 das 8 regiões</b> inteiras (ou sobrando o último de pé).<br>" +
           "Combate em <b>d8</b>: o ataque rola até <b>4</b> dados, a defesa até <b>3</b>; comparam-se os maiores e o <b>empate é da defesa</b>.<br>" +
-          "Só ataca quem tem <b>2+</b> exércitos.<br>" +
+          "Só ataca quem tem <b>2+</b> exércitos. Ao conquistar, entram <b>1, 2 ou 3</b>.<br>" +
           "Conquistou no turno? Ganha <b>1 carta</b>. Troque 3 iguais ou 3 diferentes por exércitos: <b>4, 6, 8, 10, 12, 15, 18, 20</b>, depois +5." +
         "</div>" +
         '<div class="field"><span class="flabel">Adversários (bots)</span>' +
@@ -692,41 +719,76 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         '<button class="primary" id="startBtn" style="width:100%">Começar</button>' +
       "</div>";
     ov.classList.add("on");
+    function marcarModo() {
+      ov.querySelectorAll(".modoOpcao").forEach(function (b) {
+        const on = b.dataset.modo === modo;
+        b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+    ov.querySelectorAll(".modoOpcao").forEach(function (b) {
+      b.addEventListener("click", function () { modo = b.dataset.modo; marcarModo(); });
+    });
+    marcarModo();
     let adv = 3;
     const q = ov.querySelector("#advQty");
     ov.querySelector("#advMinus").addEventListener("click", function () { adv = Math.max(1, adv - 1); q.textContent = adv; });
     ov.querySelector("#advPlus").addEventListener("click", function () { adv = Math.min(5, adv + 1); q.textContent = adv; });
-    ov.querySelector("#startBtn").addEventListener("click", function () { novoJogo(adv); });
+    ov.querySelector("#startBtn").addEventListener("click", function () { novoJogo(adv, modo); });
+  }
+
+  // A vitória pode acontecer no meio do turno (modo Clássico): o render
+  // chama isto e a janela de vitória abre uma vez só.
+  let vitoriaAgendada = false;
+  function agendarVitoria(ms) {
+    if (vitoriaAgendada || !estado || estado.vencedor === null) return;
+    vitoriaAgendada = true;
+    escolhendoConquista = false;
+    setTimeout(mostrarVitoria, ms);
   }
 
   function mostrarVitoria() {
     const ov = document.getElementById("overlay");
     const v = estado.jogadores[estado.vencedor];
-    const regs = regioesDominadas(estado, estado.vencedor);
-    const chips = Object.keys(REGIOES).map(function (r) {
-      const tem = regs.indexOf(r) !== -1;
-      return '<span class="chip" style="' + (tem ? "" : "opacity:.35") + '">' + r + "</span>";
-    }).join("");
     const venceu = estado.vencedor === HUMANO;
+    const regs = regioesDominadas(estado, estado.vencedor);
+    const ultimo = jogadoresVivos(estado).length === 1 && !verificarVitoria(estado, estado.vencedor);
+    let motivo, extra = "";
+    if (ultimo) motivo = v.nome + " é o último de pé: todos os outros reinos caíram.";
+    else if (estado.modo === "classico") {
+      const d = descreverObjetivo(estado, estado.vencedor);
+      motivo = v.nome + " cumpriu o objetivo <b>" + d.nome + "</b>: " + d.texto.split(" (")[0];
+    } else {
+      motivo = v.nome + " domina " + regs.length + " regiões inteiras.";
+      extra = '<div id="winRegions">' + Object.keys(REGIOES).map(function (r) {
+        const tem = regs.indexOf(r) !== -1;
+        return '<span class="chip" style="' + (tem ? "" : "opacity:.35") + '">' + r + "</span>";
+      }).join("") + "</div>";
+    }
+    if (estado.modo === "classico") {
+      // no fim, todos os objetivos são revelados
+      extra = '<div class="objRevelados">' + estado.jogadores.map(function (j) {
+        const d = descreverObjetivo(estado, j.id);
+        return '<div class="objRev"><span class="dot" style="background:' + j.cor + '"></span><span><b>' + j.nome + "</b> · " +
+          d.original + (d.reserva ? " <i>(virou Bretwalda)</i>" : "") + "</span></div>";
+      }).join("") + "</div>";
+    }
     ov.innerHTML =
       '<div class="modal">' +
         "<h2>" + (venceu ? "Vitória!" : v.nome + " venceu") + "</h2>" +
-        '<p class="lead">' + (venceu
-          ? "A ilha é sua, comandante. " : "Seu reino caiu. ") +
-          v.nome + " controla " + territoriosDe(estado, estado.vencedor).length + " territórios e " +
-          regs.length + " regiões inteiras.</p>" +
-        '<div id="winRegions">' + chips + "</div>" +
+        '<p class="lead">' + (venceu ? "A ilha é sua, comandante. " : "Seu reino caiu. ") + motivo + "</p>" +
+        extra +
         '<button class="primary" id="againBtn" style="width:100%">Jogar de novo</button>' +
       "</div>";
     ov.classList.add("on");
     ov.querySelector("#againBtn").addEventListener("click", mostrarInicio);
   }
 
-  function novoJogo(nBots) {
+  function novoJogo(nBots, modo) {
     const jogadores = [{ nome: "Você", tipo: "humano" }];
     for (let i = 1; i <= nBots; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
-    estado = criarPartida(jogadores);
+    estado = criarPartida(jogadores, { modo: modo });
     selecao = null; destinoSel = null; animando = false; escolhendoConquista = false;
+    vitoriaAgendada = false; objetivoOculto = false;
     document.getElementById("overlay").classList.remove("on");
     render();
     if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
@@ -752,7 +814,23 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- ligações de UI --------
+  // Painel recolhido: fica só a vez, a fase e os botões (bom no celular).
+  function aplicarPainel(recolhido) {
+    document.getElementById("app").classList.toggle("painelRecolhido", recolhido);
+    const b = document.getElementById("painelBtn");
+    b.textContent = recolhido ? "Painel ▾" : "Painel ▴";
+    b.setAttribute("aria-expanded", recolhido ? "false" : "true");
+    b.title = recolhido ? "Mostrar o painel inteiro" : "Recolher o painel";
+    try { localStorage.setItem("painelRecolhido", recolhido ? "1" : "0"); } catch (e) { /* sem armazenamento: tudo bem */ }
+  }
+
   function ligarUI() {
+    let rec = false;
+    try { rec = localStorage.getItem("painelRecolhido") === "1"; } catch (e) { /* idem */ }
+    aplicarPainel(rec);
+    document.getElementById("painelBtn").addEventListener("click", function () {
+      aplicarPainel(!document.getElementById("app").classList.contains("painelRecolhido"));
+    });
     document.getElementById("newGame").addEventListener("click", mostrarInicio);
     document.getElementById("zoomIn").addEventListener("click", function () { zoom = Math.min(4, zoom + 0.25); aplicarZoom(); });
     document.getElementById("zoomOut").addEventListener("click", function () { zoom = Math.max(1, zoom - 0.25); aplicarZoom(); });

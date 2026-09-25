@@ -109,7 +109,28 @@ function botValorAlvo(estado, id, alvo) {
   const donoAlvo = estado.territorios[alvo].dono;
   if (territoriosDe(estado, donoAlvo).length <= 2) v += 30;
 
+  // Modo Clássico: puxa para o que o objetivo secreto pede.
+  if (estado.modo === "classico") v += botBonusObjetivo(estado, id, alvo, donoAlvo);
+
   return v;
+}
+
+// Quanto um alvo ajuda o objetivo secreto do bot (modo Clássico).
+function botBonusObjetivo(estado, id, alvo, donoAlvo) {
+  const obj = objetivoEfetivo(estado, id);
+  if (!obj) return 0;
+  if (obj.tipo === "regioes") {
+    const r = regiaoDe(alvo);
+    if (obj.regioes.indexOf(r) === -1) return 0;
+    const terrs = territoriosDaRegiao(r);
+    const meus = terrs.filter(function (t) { return estado.territorios[t].dono === id; }).length;
+    return 60 + meus * 8;
+  }
+  if (obj.tipo === "destruir") {
+    if (donoAlvo !== obj.alvo) return 0;
+    return 80 + (territoriosDe(estado, donoAlvo).length <= 3 ? 400 : 0);
+  }
+  return 15; // territorios / territorios2: qualquer expansão ajuda
 }
 
 
@@ -406,6 +427,8 @@ function jogarTurnoBot(estado) {
     // Rede de segurança: se sobrou reforço por qualquer motivo, drena
     // respeitando a restrição de região, pra poder fechar a fase.
     botDrenarReforco(estado, jogador);
+    if (estado.vencedor !== null)            // Clássico: cumpriu o objetivo no reforço
+      return { ok: true, jogador: jogador, acoes: acoes, vencedor: estado.vencedor };
     terminarReforco(estado); // abre o ataque
   }
 
@@ -421,6 +444,8 @@ function jogarTurnoBot(estado) {
   // (3) Remanejamento
   if (estado.fase === "remanejamento") {
     acoes.remanejo = botRemanejar(estado);
+    if (estado.vencedor !== null)
+      return { ok: true, jogador: jogador, acoes: acoes, vencedor: estado.vencedor };
   }
 
   // (4) Passa a vez (o motor checa vitória por 5 regiões aqui).

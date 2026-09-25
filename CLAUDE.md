@@ -33,8 +33,29 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Conquista:** entram **no máximo 3 exércitos** (sempre fica 1 na origem). O jogador escolhe **1, 2 ou 3** numa janela logo após a conquista (limite decidido por Kauã: mover tudo gerava conquistas em cadeia). Bots levam automaticamente o nº de dados que rolaram, também limitado a 3. (Motor: `MAX_MOVER_CONQUISTA`, `atacar(..., { escolher: true })` + `moverNaConquista(estado, total)`.)
 - **Reforço-base** = `max(3, round(territórios / 3))` + bônus regionais + trocas de cartas.
 - **Turno:** reforço → ataque → remanejamento.
-- **Vitória:** dominar **5 das 8 regiões inteiras** (checado ao fim do turno) **ou** ser o último de pé.
+- **Vitória:** depende do **modo** (abaixo). Em todos, sobrar um único jogador vivo também é vitória.
 - **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots. Distribuição inicial: rodízio embaralhado, 1 exército por território.
+
+### Modos de jogo (escolhidos na tela de início; padrão: Clássico)
+- **Clássico:** cada jogador recebe um **objetivo secreto** diferente; vence quem cumprir o seu **na hora, durante o próprio turno** (checado após reforço, troca, ataque, conquista e remanejamento). O objetivo aparece no painel (botão Esconder/Mostrar) e todos são revelados na vitória.
+- **Domínio:** vence quem tiver **5 das 8 regiões inteiras** (checado ao fim do turno).
+- **Conquista Total:** só vence o **último de pé**.
+- Ideias para depois (aprovadas como sugestão, ainda não feitas): **Grande Exército** (assimétrico viking × reinos), **Partida Rápida** (limite de rodadas, pontos), **Duplas** (2×2 / 3×3).
+
+### Objetivos do Clássico (17, aprovados por Kauã)
+1. Alto-Rei da Irlanda — Ériu + Dál Riata
+2. Rota de Dyflin — Ériu + Cymru
+3. Caminho do Grande Exército — Northhymbre + Mierce
+4. Sonho de Alfredo — Westseaxe + Mierce
+5. Senhor do Norte — Northhymbre + Alba
+6. Terras de Offa — Mierce + East Engle + Cymru
+7. Bretwalda do Sul — Westseaxe + East Engle + Cymru
+8. Reino de Alba — Alba + Dál Riata + 1 região à escolha
+9. De Eoforwic a Lundenburg — Northhymbre + Westseaxe
+10. Bretwalda — 36 territórios
+11. Terra Assentada — 27 territórios com 2+ exércitos em cada
+12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Se a cor não estiver na partida, for você mesmo, ou outro jogador eliminá-la antes, vale **36 territórios** (objetivo reserva).
+- Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
 
 ### Reforço "Modo B" (sequência guiada)
 - O bônus de cada região fica **preso à própria região**.
@@ -74,17 +95,19 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
 
-**Ações:** `criarPartida(jogadores)` · `calcularReforcos` → `{ base, porRegiao, ordem, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma).
+**Ações:** `criarPartida(jogadores, { modo })` · `calcularReforcos` → `{ base, porRegiao, ordem, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma).
 
-**Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`.
+**Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`, `objetivoCumprido`, `objetivoEfetivo`, `descreverObjetivo`. Dados dos modos/objetivos: `MODOS`, `OBJETIVOS`, `OBJETIVO_RESERVA`.
 
-**Estado** (dado simples, pronto para salvar/enviar): `territorios`, `jogadores` (cada um com `cartas`), `vez`, `turno`, `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `ultimoEvento`, `log`.
+**Estado** (dado simples, pronto para salvar/enviar): `modo`, `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico e `eliminadoPor`), `vez`, `turno`, `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `ultimoEvento`, `log`.
 
 ### Tela — pontos-chave
 - Mapa estilo WAR: cada território é uma área pintada com a **cor da sua região**; divisa fina entre territórios, grossa entre regiões; peças (discos) com a **cor do dono** e o nº de exércitos. Tocar no território ou na peça.
 - Nomes de território que colidem mudam de lugar sozinhos (`afastarNomes`).
 - **Dados** aparecem em cima da batalha e somem em 1,5 s.
 - **Zoom** pelos botões + / − (mantém o centro).
+- **Botão "Painel"** no cabeçalho recolhe o painel (fica só a vez, a fase e os botões) — pensado para o celular; a escolha fica guardada no navegador.
+- Painel mostra o **modo** e, no Clássico, o **objetivo** do jogador.
 - Bots jogam com pausa (~780 ms); territórios que trocam de dono piscam.
 - Cores dos assentos: `#c0392b`, `#2c6fbb`, `#27ae60`, `#e0a200`, `#8e44ad`, `#16a085`. Acento pergaminho/osso `#cbb892`; títulos em **Cinzel**.
 
@@ -125,10 +148,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 5. **Cartas e trocas**; dados em cima da batalha; zoom consertado; número de versão; Eoforwic; fronteiras corrigidas.
 6. **7 ligações novas** (playtest); ilhas do noroeste para a terra firme.
 7. **Escolha de quantos exércitos entram na conquista** — depois limitada a 1, 2 ou 3.
+8. **Modos Clássico (17 objetivos), Domínio e Conquista Total**; botão de recolher o painel; cabeçalho ajustado ao celular.
 
 ## 8. Próximos passos (ordem combinada)
 
 1. **Playtest de Kauã no celular** (pendente) — e ajustes que saírem dele.
-2. **Objetivos e outros modos de jogo** (missões secretas estilo WAR etc.) — começa com conversa de design.
-3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir e troca de versão).
+2. **Outros modos** (Grande Exército, Partida Rápida, Duplas, ou novos que Kauã trouxer) — depois do teste dos três primeiros.
+3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
 4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
