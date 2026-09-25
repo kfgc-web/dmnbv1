@@ -43,6 +43,7 @@ Crie uma sala e mande o **convite** (o link já entra direto na sala) ou passe o
 - Se alguém **cair**, o bot joga a vez dele depois de 10 segundos. Quando a pessoa volta, é só abrir o jogo de novo.
 - Se alguém ficar **parado** mais de 1 minuto, quem criou a sala pode pôr o bot para jogar aquela vez.
 - Os dados saem de um sorteio que todos os aparelhos conferem: ninguém consegue inventar resultado.
+- No fim, **Jogar de novo** leva todo mundo de volta para a sala, com os mesmos lugares e cores: é só começar a revanche.
 
 ![Sala online](imagens/sala-online.jpg)
 
@@ -96,6 +97,7 @@ Create a room and send the **invite link** (it opens straight into the room) or 
 - If someone **drops out**, a bot plays their turn after 10 seconds. To get back in, they just open the game again.
 - If someone is **idle** for more than a minute, the host can let a bot play that turn.
 - Dice come from a shared draw that every device checks, so nobody can fake a roll.
+- When the game ends, **Play again** brings everyone back to the room with the same seats and colours, ready for a rematch.
 
 ### On your phone
 
