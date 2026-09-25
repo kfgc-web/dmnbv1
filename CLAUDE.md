@@ -54,7 +54,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 9. De Eoforwic a Lundenburg — Northhymbre + Westseaxe
 10. Bretwalda — 36 territórios
 11. Terra Assentada — 27 territórios com 2+ exércitos em cada
-12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Se a cor não estiver na partida, for você mesmo, ou outro jogador eliminá-la antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
+12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). **Só é sorteada se a cor estiver na partida** e nunca contra a própria cor (pedido de Kauã). Se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
 - Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
 
 ### Reforço "Modo B" (sequência guiada)
@@ -150,10 +150,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 6. **7 ligações novas** (playtest); ilhas do noroeste para a terra firme.
 7. **Escolha de quantos exércitos entram na conquista** — depois limitada a 1, 2 ou 3.
 8. **Modos Clássico (17 objetivos), Domínio e Conquista Total**; botão de recolher o painel; cabeçalho ajustado ao celular.
+9. Playtest no celular aprovado; Rixa de Sangue só sorteada contra cores presentes.
 
 ## 8. Próximos passos (ordem combinada)
 
-1. **Playtest de Kauã no celular** (pendente) — e ajustes que saírem dele.
-2. **Outros modos** (Grande Exército, Partida Rápida, Duplas, ou novos que Kauã trouxer) — depois do teste dos três primeiros.
+1. ~~Playtest de Kauã no celular~~ — ok. Ajuste que saiu dele: Rixa de Sangue só contra cores presentes.
+2. **Outros modos** — em definição com Kauã. **Partida Rápida:** acaba em 15 turnos; cada território vale 1 ponto, território de região inteira vale 3. Grande Exército e Duplas/Trios: regras em discussão.
 3. **PWA** — instalável e jogável offline; deve **atualizar sozinho** quando houver versão nova (service worker que procura atualização ao abrir; aviso "Nova versão disponível, toque para atualizar"). Junto: **modo paisagem no celular** (layout próprio deitado, aviso "gire o celular" em pé, e travar deitado no app instalado — o Android respeita, o iPhone não).
 4. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e 6 assentos. Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).

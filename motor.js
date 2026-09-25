@@ -108,9 +108,9 @@ const MODO_PADRAO = "dominio";
 //   regioes: dominar todas as regiões da lista (+ "extra" regiões quaisquer).
 //   territorios: ter pelo menos "qtd" territórios.
 //   territorios2: ter pelo menos "qtd" territórios com "min"+ exércitos em cada.
-//   destruir: eliminar o jogador do assento "alvo" (cor). Se esse assento não
-//     estiver na partida, for você mesmo, ou outro jogador eliminá-lo antes,
-//     o objetivo vira OBJETIVO_RESERVA (conquistar 36 territórios).
+//   destruir: eliminar o jogador do assento "alvo" (cor). Só é sorteado se
+//     essa cor estiver na partida e não for a sua; se outro jogador eliminá-la
+//     antes, o objetivo vira OBJETIVO_RESERVA (conquistar 36 territórios).
 const OBJETIVO_RESERVA = { tipo: "territorios", qtd: 36 };
 const NOMES_COR = ["vermelho", "azul", "verde", "âmbar", "roxo", "turquesa"];
 const OBJETIVOS = [
@@ -458,9 +458,14 @@ function criarPartida(jogadores, opcoes) {
   estado.baralho = embaralhar(cartas);
 
   // Clássico: cada jogador recebe um objetivo secreto diferente.
+  // Rixa de Sangue só entra no sorteio se a cor-alvo estiver na partida,
+  // e ninguém recebe a Rixa contra a própria cor (pedido de Kauã).
   if (modo === "classico") {
-    const objs = embaralhar(OBJETIVOS);
-    estado.jogadores.forEach(function (j, i) { j.objetivo = objs[i]; });
+    const objs = embaralhar(OBJETIVOS.filter(function (o) { return o.tipo !== "destruir" || o.alvo < n; }));
+    estado.jogadores.forEach(function (j, i) {
+      const k = objs.findIndex(function (o) { return !(o.tipo === "destruir" && o.alvo === i); });
+      j.objetivo = objs.splice(k, 1)[0];
+    });
   }
 
   // Primeiro turno já montado: o jogador 0 recebe seu lote de reforços

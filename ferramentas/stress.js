@@ -44,6 +44,10 @@ for (const modo of MODOS) {
     for (let i = 0; i < n; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
     const e = J.criarPartida(jogadores, { modo: modo });
     if (modo === "classico" && new Set(e.jogadores.map(function (j) { return j.objetivo.id; })).size !== n) quebras++;
+    // Rixa de Sangue só contra cor presente na partida e nunca contra si mesmo.
+    if (modo === "classico" && e.jogadores.some(function (j, i) {
+      return j.objetivo.tipo === "destruir" && (j.objetivo.alvo >= n || j.objetivo.alvo === i);
+    })) quebras++;
     let t = 0;
     try {
       while (e.vencedor === null && t < LIMITE_TURNOS) {
