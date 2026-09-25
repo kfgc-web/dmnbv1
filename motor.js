@@ -20,6 +20,7 @@
      posicionarReforco(estado, t, qtd)  -> põe reforços num território (respeita a restrição de região)
      terminarReforco(estado)            -> fecha reforços, abre ataque
      atacar(estado, origem, destino)    -> 1 ataque (1 rolagem)
+     moverNaConquista(estado, total)    -> depois de conquistar, escolhe quantos exércitos entram
      terminarAtaque(estado)             -> fecha ataque, abre remanejo
      remanejar(estado, orig, dest, qtd) -> 1 pulo de remanejamento (vários por turno; trava por exército)
      passarVez(estado)                  -> fecha o turno e chama o próximo
@@ -45,6 +46,7 @@
        descarte:          [ ... ],      // cartas já trocadas (voltam ao baralho quando ele acaba)
        trocasFeitas:      0,            // quantas trocas a mesa já fez (define o valor da próxima)
        conquistouNoTurno: false,        // o jogador da vez já conquistou algo neste turno?
+       conquista:         null,         // { origem, destino } enquanto o jogador escolhe quantos entram
        vencedor:          null,         // id quando alguém vence
        ultimoEvento:      {...},        // último acontecimento (p/ a tela)
        log:               [ "...", ]    // histórico curto (p/ depurar/feed)
@@ -301,6 +303,7 @@ function criarPartida(jogadores) {
     descarte: [],
     trocasFeitas: 0,
     conquistouNoTurno: false,
+    conquista: null,
     vencedor: null,
     ultimoEvento: { tipo: "inicio" },
     log: [],
@@ -489,10 +492,14 @@ function comprarCarta(estado, idJogador) {
 //
 // opcoes.mover (opcional): quantos exércitos levar ao conquistar.
 //   Sem informar, leva o nº de dados que rolou. Sempre deixa 1 atrás.
+// opcoes.escolher (opcional, a tela usa): ao conquistar, entra só 1 e a
+//   conquista fica "aberta" em estado.conquista; o jogador escolhe o total
+//   com moverNaConquista. Qualquer outra ação fecha a escolha (fica o que entrou).
 function atacar(estado, origem, destino, opcoes) {
   opcoes = opcoes || {};
   if (estado.fase !== "ataque")
     return { ok: false, erro: "Não é a fase de ataque." };
+  estado.conquista = null; // atacar de novo fecha uma escolha de conquista em aberto
   const a = estado.territorios[origem];
   const d = estado.territorios[destino];
   if (!a) return { ok: false, erro: 'Território "' + origem + '" não existe.' };
@@ -532,13 +539,14 @@ function atacar(estado, origem, destino, opcoes) {
     // Quantos mover pra dentro: por padrão, o nº de dados que rolou.
     // Pode pedir outro valor em opcoes.mover. Sempre deixa 1 pra trás.
     const donoAntigo = d.dono;
-    let mover = (opcoes.mover != null) ? opcoes.mover : nAtq;
+    let mover = opcoes.escolher ? 1 : (opcoes.mover != null) ? opcoes.mover : nAtq;
     mover = Math.max(1, Math.min(mover, a.exercitos - 1));
     a.exercitos -= mover;
     d.exercitos = mover;
     d.dono = estado.vez;
     exercitosMovidos = mover;
     estado.conquistouNoTurno = true;
+    if (opcoes.escolher && a.exercitos > 1) estado.conquista = { origem: origem, destino: destino };
     anotar(estado, estado.jogadores[estado.vez].nome + " conquistou " + destino + ".");
     marcarEliminados(estado);
     // Quem elimina um jogador fica com as cartas dele.
@@ -565,7 +573,26 @@ function atacar(estado, origem, destino, opcoes) {
     dadosAtaque: dadosAtaque, dadosDefesa: dadosDefesa,
     perdasAtacante: perdasAtacante, perdasDefensor: perdasDefensor,
     conquistou: conquistou, exercitosMovidos: exercitosMovidos,
+    // com opcoes.escolher: até quantos exércitos podem ficar no conquistado
+    podeFicarAte: estado.conquista ? d.exercitos + a.exercitos - 1 : null,
   };
+}
+
+// Depois de uma conquista com opcoes.escolher: define quantos exércitos
+// ficam no território conquistado (total, de 1 até tudo menos 1 da origem).
+function moverNaConquista(estado, total) {
+  const c = estado.conquista;
+  if (!c) return { ok: false, erro: "Não há conquista esperando a escolha." };
+  const a = estado.territorios[c.origem], d = estado.territorios[c.destino];
+  const max = d.exercitos + a.exercitos - 1;
+  if (total == null || total < 1 || total > max)
+    return { ok: false, erro: "Escolha entre 1 e " + max + "." };
+  const extra = total - d.exercitos;
+  a.exercitos -= extra;
+  d.exercitos += extra;
+  estado.conquista = null;
+  estado.ultimoEvento = { tipo: "conquistaMovida", origem: c.origem, destino: c.destino, total: total };
+  return { ok: true, origem: c.origem, destino: c.destino, total: total };
 }
 
 // Encerra a fase de ataque e abre o remanejamento.
@@ -573,6 +600,7 @@ function terminarAtaque(estado) {
   if (estado.fase !== "ataque")
     return { ok: false, erro: "Não é a fase de ataque." };
   estado.fase = "remanejamento";
+  estado.conquista = null;
   // Início do remanejamento: TODOS os exércitos entram "frescos" (movidos vazio).
   // Isso inclui os que avançaram para um território conquistado durante o ataque
   // — a trava só conta movimentos feitos DENTRO da fase de remanejamento.
@@ -633,6 +661,7 @@ function passarVez(estado) {
     return { ok: false, erro: "Só dá para passar a vez depois de receber os reforços." };
 
   marcarEliminados(estado);
+  estado.conquista = null;
 
   // Conquistou pelo menos 1 território neste turno? Ganha UMA carta.
   let carta = null;
