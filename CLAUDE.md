@@ -21,9 +21,9 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Protocolo:** esclarecer → confirmar → **"pode ir"** → agir. Nada de mudar arquivos do jogo antes do OK explícito. Protótipos e maquetes para Kauã avaliar (fora do repositório) podem ser feitos antes.
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
 - **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` (evita o navegador usar arquivo velho guardado).
-- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** (3.000 partidas, 2 a 6 jogadores, zero falhas; conferir o total de 66 cartas a cada turno).
+- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores; confere 66 cartas a cada turno e, no Clássico, objetivos distintos e vencedor que cumpriu o objetivo). Precisa terminar em "tudo certo, zero falhas".
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
-- Testar a tela num navegador (Chromium/Playwright) antes de entregar: sem erros no console.
+- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots e o layout do celular (cabeçalho, metade da tela, rolagem única). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
 
 ## 3. Regras do jogo
 
@@ -90,7 +90,7 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 | `desenho.js` | **Gerado** pelo gerador (§6) — não editar à mão. Litoral, contorno de cada território, divisas, lagos, rotas, posição das peças e dos nomes de região |
 | `cartas.js` | Só o **visual** das cartas (SVG): pergaminho, borda trançada celta, faixa com nome, silhueta do território, medalhão do símbolo |
 | `telas.js` | Toda a interface: tabuleiro, painel, janelas (início, troca de cartas, conquista, vitória), dados, zoom |
-| `ferramentas/` | Gerador do mapa (não é carregado pelo jogo) |
+| `ferramentas/` | Não é carregado pelo jogo: gerador do mapa (`gerar-mapa.js`, `gerar-desenho.js`), `stress.js` (stress dos bots) e `teste-tela.js` (teste no navegador) |
 
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
