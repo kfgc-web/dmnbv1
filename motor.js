@@ -77,6 +77,7 @@ const ORDEM_REGIOES_REFORCO = [
 const LADOS_DADO = 8;           // dado de 8 lados (d8)
 const MAX_DADOS_ATAQUE = 4;     // atacante rola até 4
 const MAX_DADOS_DEFESA = 3;     // defensor rola até 3
+const MAX_MOVER_CONQUISTA = 3;  // ao conquistar, entram no máximo 3 exércitos
 
 // CARTAS — uma por território (símbolo fixo) + coringas.
 const SIMBOLOS = ["espada", "escudo", "navio"];
@@ -491,7 +492,8 @@ function comprarCarta(estado, idJogador) {
 // move tropas pra dentro (deixando ao menos 1 para trás).
 //
 // opcoes.mover (opcional): quantos exércitos levar ao conquistar.
-//   Sem informar, leva o nº de dados que rolou. Sempre deixa 1 atrás.
+//   Sem informar, leva o nº de dados que rolou. Sempre deixa 1 atrás e
+//   nunca passa de MAX_MOVER_CONQUISTA (3).
 // opcoes.escolher (opcional, a tela usa): ao conquistar, entra só 1 e a
 //   conquista fica "aberta" em estado.conquista; o jogador escolhe o total
 //   com moverNaConquista. Qualquer outra ação fecha a escolha (fica o que entrou).
@@ -540,7 +542,7 @@ function atacar(estado, origem, destino, opcoes) {
     // Pode pedir outro valor em opcoes.mover. Sempre deixa 1 pra trás.
     const donoAntigo = d.dono;
     let mover = opcoes.escolher ? 1 : (opcoes.mover != null) ? opcoes.mover : nAtq;
-    mover = Math.max(1, Math.min(mover, a.exercitos - 1));
+    mover = Math.max(1, Math.min(mover, MAX_MOVER_CONQUISTA, a.exercitos - 1));
     a.exercitos -= mover;
     d.exercitos = mover;
     d.dono = estado.vez;
@@ -574,17 +576,17 @@ function atacar(estado, origem, destino, opcoes) {
     perdasAtacante: perdasAtacante, perdasDefensor: perdasDefensor,
     conquistou: conquistou, exercitosMovidos: exercitosMovidos,
     // com opcoes.escolher: até quantos exércitos podem ficar no conquistado
-    podeFicarAte: estado.conquista ? d.exercitos + a.exercitos - 1 : null,
+    podeFicarAte: estado.conquista ? Math.min(MAX_MOVER_CONQUISTA, d.exercitos + a.exercitos - 1) : null,
   };
 }
 
 // Depois de uma conquista com opcoes.escolher: define quantos exércitos
-// ficam no território conquistado (total, de 1 até tudo menos 1 da origem).
+// ficam no território conquistado (total: 1, 2 ou 3, sempre deixando 1 na origem).
 function moverNaConquista(estado, total) {
   const c = estado.conquista;
   if (!c) return { ok: false, erro: "Não há conquista esperando a escolha." };
   const a = estado.territorios[c.origem], d = estado.territorios[c.destino];
-  const max = d.exercitos + a.exercitos - 1;
+  const max = Math.min(MAX_MOVER_CONQUISTA, d.exercitos + a.exercitos - 1);
   if (total == null || total < 1 || total > max)
     return { ok: false, erro: "Escolha entre 1 e " + max + "." };
   const extra = total - d.exercitos;

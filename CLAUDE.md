@@ -30,7 +30,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **64 territórios em 8 regiões** (nomes de época, §5).
 - **Bônus por região inteira:** Ériu 7 · Mierce 6 · Westseaxe 5 · Northhymbre 5 · Alba 5 · Dál Riata 4 · East Engle 3 · Cymru 3.
 - **Combate:** dados **d8**; ataque rola até 4 dados (precisa deixar 1), defesa até 3; comparam-se os 3 maiores do ataque com os da defesa, maior × maior; **empate é da defesa**.
-- **Conquista:** o jogador **escolhe quantos exércitos entram** (de 1 até tudo menos 1 da origem), numa janela logo após a conquista. Bots continuam levando automaticamente o nº de dados que rolaram. (Motor: `atacar(..., { escolher: true })` + `moverNaConquista(estado, total)`.)
+- **Conquista:** entram **no máximo 3 exércitos** (sempre fica 1 na origem). O jogador escolhe **1, 2 ou 3** numa janela logo após a conquista (limite decidido por Kauã: mover tudo gerava conquistas em cadeia). Bots levam automaticamente o nº de dados que rolaram, também limitado a 3. (Motor: `MAX_MOVER_CONQUISTA`, `atacar(..., { escolher: true })` + `moverNaConquista(estado, total)`.)
 - **Reforço-base** = `max(3, round(territórios / 3))` + bônus regionais + trocas de cartas.
 - **Turno:** reforço → ataque → remanejamento.
 - **Vitória:** dominar **5 das 8 regiões inteiras** (checado ao fim do turno) **ou** ser o último de pé.
@@ -124,7 +124,7 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 4. **Nomes de época** aplicados; **mapa desenhado estilo WAR** a partir do litoral real.
 5. **Cartas e trocas**; dados em cima da batalha; zoom consertado; número de versão; Eoforwic; fronteiras corrigidas.
 6. **7 ligações novas** (playtest); ilhas do noroeste para a terra firme.
-7. **Escolha de quantos exércitos entram na conquista.**
+7. **Escolha de quantos exércitos entram na conquista** — depois limitada a 1, 2 ou 3.
 
 ## 8. Próximos passos (ordem combinada)
 
