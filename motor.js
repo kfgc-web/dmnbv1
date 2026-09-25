@@ -15,7 +15,8 @@
    Não altere a lógica aqui sem reexecutar os testes.
    ------------------------------------------------------------
    API PÚBLICA (os "verbos" do jogo):
-     criarPartida(jogadores, opcoes)    -> cria a partida pronta (opcoes.modo: "classico" | "dominio" | "total")
+     criarPartida(jogadores, opcoes)    -> cria a partida pronta (opcoes.modo: veja MODOS;
+                                           opcoes.tamanhoEquipe: 2 ou 3 no modo "equipes")
      calcularReforcos(estado, id)       -> detalha reforços { base, porRegiao, ordem, total }
      posicionarReforco(estado, t, qtd)  -> põe reforços num território (respeita a restrição de região)
      terminarReforco(estado)            -> fecha reforços, abre ataque
@@ -31,19 +32,22 @@
      inimigosVizinhos, ehFronteira, frescosEm, jogadoresVivos,
      verificarVitoria, resumoJogadores,
      acharTroca, trocaValida, valorDaTroca, simboloDoTerritorio,
-     objetivoCumprido, objetivoEfetivo, descreverObjetivo
+     objetivoCumprido, objetivoEfetivo, descreverObjetivo,
+     modoDisponivel, saoAliados, regioesDaEquipe, membrosDaEquipe,
+     pontosRapida, ehViking, descreverMeta
 
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
      estado = {
        territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
-       modo:        "dominio",        // "classico" (objetivos) | "dominio" (5 regiões) | "total" (último de pé)
+       modo:        "dominio",        // chave de MODOS (classico, dominio, total, rapida, grande, equipes)
        jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ],
-                        objetivo (só no clássico), eliminadoPor (id de quem o eliminou) }, ... ],
+                        objetivo (só no clássico), eliminadoPor (id de quem o eliminou),
+                        reino + pontos (só no Grande Exército), equipe (só no Equipes) }, ... ],
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
        fase:              "reforco",    // reforco|ataque|remanejamento|fim
        reforcosPendentes: 0,            // total de reforços que faltam posicionar
-       reforco:           {...},        // detalhamento do reforço: { base, porRegiao, ordem }
+       reforco:           {...},        // detalhamento do reforço: { base, porRegiao, ordem, mar }
        movidos:           {...},        // por território: exércitos que JÁ moveram nesta fase de remanejo (travados)
        baralho:           [ {t, s}, ...], // cartas para comprar (t = território ou null no coringa)
        descarte:          [ ... ],      // cartas já trocadas (voltam ao baralho quando ele acaba)
@@ -51,6 +55,8 @@
        conquistouNoTurno: false,        // o jogador da vez já conquistou algo neste turno?
        conquista:         null,         // { origem, destino } enquanto o jogador escolhe quantos entram
        vencedor:          null,         // id quando alguém vence
+       resultado:         null,         // como a partida acabou (p/ a tela): { motivo, ... }
+       ultimoGolpe:       null,         // Grande Exército: quem tomou o último território viking
        ultimoEvento:      {...},        // último acontecimento (p/ a tela)
        log:               [ "...", ]    // histórico curto (p/ depurar/feed)
      }
@@ -97,10 +103,17 @@ const CARTAS_TROCA_OBRIGATORIA = 5; // com 5+ na mão, troca antes de posicionar
 //   dominio:  vence quem tiver 5 das 8 regiões inteiras (checado no fim do turno).
 //   total:    só vence o último de pé.
 // Em todos os modos, sobrar um único jogador vivo também é vitória.
+//   rapida:   acaba depois de RODADAS_RAPIDA rodadas; vence quem tiver mais pontos
+//             (1 por território; 3 por território de região inteira sua).
+//   grande:   Grande Exército — 9 assentos fixos: os Vikings contra os 8 reinos.
+//   equipes:  duplas ou trios sorteados; vence a equipe com 5 das 8 regiões.
 const MODOS = {
   classico: { nome: "Clássico", resumo: "Cada um recebe um objetivo secreto. Vence quem cumprir o seu primeiro." },
   dominio:  { nome: "Domínio", resumo: "Vence quem dominar 5 das 8 regiões inteiras." },
   total:    { nome: "Conquista Total", resumo: "Só vence o último de pé. Partida longa." },
+  rapida:   { nome: "Partida Rápida", resumo: "15 rodadas. No fim, cada território vale 1 ponto, ou 3 se a região inteira for sua." },
+  grande:   { nome: "Grande Exército", resumo: "Os vikings invadem e cada reino é um jogador (9 lugares). Vikings: dominar 4 regiões. Reinos: expulsar os vikings." },
+  equipes:  { nome: "Equipes", resumo: "Duplas ou trios sorteados, sem atacar o parceiro. Vence a equipe com 5 das 8 regiões." },
 };
 const MODO_PADRAO = "dominio";
 
@@ -112,7 +125,7 @@ const MODO_PADRAO = "dominio";
 //     essa cor estiver na partida. Se for você mesmo, ou outro jogador
 //     eliminá-la antes, o objetivo vira OBJETIVO_RESERVA (conquistar 36 territórios).
 const OBJETIVO_RESERVA = { tipo: "territorios", qtd: 36 };
-const NOMES_COR = ["vermelho", "azul", "verde", "âmbar", "roxo", "turquesa"];
+const NOMES_COR = ["vermelho", "azul", "verde", "âmbar", "roxo", "turquesa", "preto", "branco", "rosa"];
 const OBJETIVOS = [
   { id: "alto-rei", nome: "Alto-Rei da Irlanda", tipo: "regioes", regioes: ["Ériu", "Dál Riata"], extra: 0 },
   { id: "rota-dyflin", nome: "Rota de Dyflin", tipo: "regioes", regioes: ["Ériu", "Cymru"], extra: 0 },
@@ -133,8 +146,30 @@ const OBJETIVOS = [
   { id: "rixa-5", nome: "Rixa de Sangue", tipo: "destruir", alvo: 5 },
 ];
 
-// Cor de cada assento (até 6 jogadores).
-const CORES = ["#c0392b", "#2c6fbb", "#27ae60", "#e0a200", "#8e44ad", "#16a085"];
+// Cor de cada assento (até 6 jogadores; as 3 últimas são do Grande Exército).
+const CORES = ["#c0392b", "#2c6fbb", "#27ae60", "#e0a200", "#8e44ad", "#16a085", "#1e1e1e", "#ecf0f1", "#e84393"];
+
+// PARTIDA RÁPIDA
+const RODADAS_RAPIDA = 15;
+const PONTOS_TERRITORIO = 1;          // cada território
+const PONTOS_TERRITORIO_REGIAO = 3;   // cada território de uma região inteira sua
+
+// GRANDE EXÉRCITO (regras fechadas com Kauã)
+// Assentos fixos, na ORDEM DE JOGADA (dos mais "afetados" para os menos).
+const VIKINGS = "Vikings";
+const REINOS_GRANDE = [VIKINGS, "East Engle", "Northhymbre", "Mierce", "Westseaxe", "Cymru", "Dál Riata", "Alba", "Ériu"];
+// Cor de cada lado (escolhida para contrastar com a cor da própria região).
+const COR_REINO = {
+  "Vikings": "#1e1e1e", "East Engle": "#2c6fbb", "Northhymbre": "#e0a200", "Mierce": "#27ae60",
+  "Westseaxe": "#8e44ad", "Cymru": "#ecf0f1", "Dál Riata": "#c0392b", "Alba": "#16a085", "Ériu": "#e84393",
+};
+const INICIO_VIKINGS = ["Eoforwic", "Streoneshalh", "Mameceaster", "Northfolc", "Suthfolc"];
+const EXERCITOS_INICIO_GRANDE = { "Vikings": 7, "East Engle": 3, "Northhymbre": 2 }; // os demais: 1
+const REFORCO_MAR = 3;                // vikings: +3 por turno, só no litoral
+const META_VIKINGS = ["Northhymbre", "Mierce", "East Engle", "Westseaxe"];
+
+// EQUIPES
+const NOMES_EQUIPE = ["A", "B", "C"];
 
 
 /* ----------------------------------------------------------------
@@ -154,6 +189,11 @@ function embaralhar(array) {
 // Rola um dado de 8 lados: devolve um número de 1 a 8.
 function rolarD8() {
   return 1 + Math.floor(Math.random() * LADOS_DADO);
+}
+
+// Rola um dado de 6 lados (só no desempate final).
+function rolarD6() {
+  return 1 + Math.floor(Math.random() * 6);
 }
 
 // Rola "qtd" dados e devolve já ordenados do MAIOR para o menor.
@@ -209,11 +249,79 @@ function regioesDominadas(estado, idJogador) {
 }
 
 // Vizinhos de um território que são de OUTRO dono (= alvos válidos de ataque).
+// No modo Equipes, o parceiro não conta como inimigo.
 function inimigosVizinhos(estado, territorio) {
   const dono = estado.territorios[territorio].dono;
   return vizinhosDe(territorio).filter(function (v) {
-    return estado.territorios[v].dono !== dono;
+    const outro = estado.territorios[v].dono;
+    return outro !== dono && !saoAliados(estado, dono, outro);
   });
+}
+
+// Modo Equipes: os dois jogadores são parceiros (mesma equipe)?
+function saoAliados(estado, a, b) {
+  if (estado.modo !== "equipes" || a === b) return false;
+  return estado.jogadores[a].equipe === estado.jogadores[b].equipe;
+}
+
+// Modo Equipes: ids dos jogadores de uma equipe.
+function membrosDaEquipe(estado, equipe) {
+  return estado.jogadores.filter(function (j) { return j.equipe === equipe; }).map(function (j) { return j.id; });
+}
+
+// Modo Equipes: regiões inteiras nas mãos da equipe (somando os parceiros).
+function regioesDaEquipe(estado, equipe) {
+  return Object.keys(REGIOES).filter(function (r) {
+    return territoriosDaRegiao(r).every(function (t) {
+      return estado.jogadores[estado.territorios[t].dono].equipe === equipe;
+    });
+  });
+}
+
+// Modo Equipes: quem da equipe recebe o bônus de uma região da equipe —
+// quem tem mais territórios nela; empate: mais exércitos lá; depois, quem joga antes.
+function beneficiarioDaRegiao(estado, regiao) {
+  const conta = {};
+  territoriosDaRegiao(regiao).forEach(function (t) {
+    const d = estado.territorios[t];
+    if (!conta[d.dono]) conta[d.dono] = { id: d.dono, terr: 0, exe: 0 };
+    conta[d.dono].terr += 1;
+    conta[d.dono].exe += d.exercitos;
+  });
+  return Object.keys(conta).map(function (k) { return conta[k]; }).sort(function (a, b) {
+    return (b.terr - a.terr) || (b.exe - a.exe) || (a.id - b.id);
+  })[0].id;
+}
+
+// Regiões cujo bônus vai para o jogador neste turno (no Equipes, as da equipe
+// em que ele é o beneficiário; nos outros modos, as que ele tem inteiras).
+function regioesComBonus(estado, idJogador) {
+  if (estado.modo !== "equipes") return regioesDominadas(estado, idJogador);
+  return regioesDaEquipe(estado, estado.jogadores[idJogador].equipe).filter(function (r) {
+    return beneficiarioDaRegiao(estado, r) === idJogador;
+  });
+}
+
+// Grande Exército: este jogador é o dos Vikings?
+function ehViking(estado, idJogador) {
+  return estado.modo === "grande" && estado.jogadores[idJogador].reino === VIKINGS;
+}
+
+// Partida Rápida: pontos do jogador agora (1 por território; 3 por
+// território de região inteira dele).
+function pontosRapida(estado, idJogador) {
+  const dom = regioesDominadas(estado, idJogador);
+  return territoriosDe(estado, idJogador).reduce(function (s, t) {
+    return s + (dom.indexOf(regiaoDe(t)) !== -1 ? PONTOS_TERRITORIO_REGIAO : PONTOS_TERRITORIO);
+  }, 0);
+}
+
+// O modo pode ser jogado com n jogadores? (Grande Exército tem sempre 9 lugares;
+// Equipes só com 4 ou 6; os outros de 2 a 6.)
+function modoDisponivel(modo, n) {
+  if (modo === "grande") return true;
+  if (modo === "equipes") return n === 4 || n === 6;
+  return n >= 2 && n <= 6;
 }
 
 // Este território encosta em inimigo? (útil pros bots e pra destacar a linha de frente)
@@ -238,9 +346,36 @@ function jogadoresVivos(estado) {
 // que vale em todos os modos e é checado à parte)
 function verificarVitoria(estado, idJogador) {
   const modo = estado.modo || MODO_PADRAO;
-  if (modo === "total") return false;
+  if (modo === "total" || modo === "rapida") return false;
   if (modo === "classico") return objetivoCumprido(estado, idJogador);
+  if (modo === "grande") return vikingsCumpriram(estado, idJogador);
+  if (modo === "equipes")
+    return regioesDaEquipe(estado, estado.jogadores[idJogador].equipe).length >= REGIOES_PARA_VENCER;
   return regioesDominadas(estado, idJogador).length >= REGIOES_PARA_VENCER;
+}
+
+// Grande Exército: os Vikings já têm as 4 regiões da meta inteiras?
+function vikingsCumpriram(estado, idJogador) {
+  if (!ehViking(estado, idJogador) || !estado.jogadores[idJogador].vivo) return false;
+  const dom = regioesDominadas(estado, idJogador);
+  return META_VIKINGS.every(function (r) { return dom.indexOf(r) !== -1; });
+}
+
+// Texto da meta do jogador nos modos sem objetivo secreto (p/ o painel).
+function descreverMeta(estado, idJogador) {
+  const j = estado.jogadores[idJogador];
+  if (estado.modo === "grande") {
+    return ehViking(estado, idJogador)
+      ? "Dominar " + META_VIKINGS.slice(0, -1).join(", ") + " e " + META_VIKINGS[META_VIKINGS.length - 1] + " inteiras."
+      : "Expulsar os vikings. Quando eles caírem, vence o reino com mais pontos (1 por exército viking derrotado, no ataque ou na defesa).";
+  }
+  if (estado.modo === "equipes") {
+    const parceiros = membrosDaEquipe(estado, j.equipe).filter(function (id) { return id !== idJogador; })
+      .map(function (id) { return estado.jogadores[id].nome; });
+    return "Equipe " + NOMES_EQUIPE[j.equipe] + " (com " + parceiros.join(" e ") + "): dominar 5 das 8 regiões somando a equipe.";
+  }
+  if (estado.modo === "rapida") return MODOS.rapida.resumo;
+  return MODOS[estado.modo].resumo;
 }
 
 // O objetivo que VALE agora para o jogador (a "Rixa de Sangue" vira o
@@ -318,10 +453,15 @@ function descreverObjetivo(estado, idJogador) {
   };
 }
 
-// Modo Clássico: vitória NA HORA, durante o turno do jogador da vez.
-function checarObjetivo(estado) {
-  if ((estado.modo || MODO_PADRAO) !== "classico" || estado.vencedor !== null) return;
-  if (objetivoCumprido(estado, estado.vez)) declararVitoria(estado, estado.vez);
+// Vitória NA HORA, durante o turno do jogador da vez: objetivo do Clássico
+// ou a meta dos Vikings no Grande Exército.
+function checarNaHora(estado) {
+  if (estado.vencedor !== null) return;
+  const modo = estado.modo || MODO_PADRAO;
+  if (modo === "classico" && objetivoCumprido(estado, estado.vez))
+    declararVitoria(estado, estado.vez, { motivo: "objetivo" });
+  else if (modo === "grande" && vikingsCumpriram(estado, estado.vez))
+    declararVitoria(estado, estado.vez, { motivo: "vikings" });
 }
 
 // Símbolo da carta de um território (fixo: segue a ordem de mapa.js,
@@ -376,6 +516,9 @@ function resumoJogadores(estado) {
       exercitos: contarExercitos(estado, j.id),
       regioes: regioesDominadas(estado, j.id),
       cartas: (j.cartas || []).length,
+      reino: j.reino || null,
+      pontos: estado.modo === "grande" ? (j.pontos || 0) : estado.modo === "rapida" ? pontosRapida(estado, j.id) : null,
+      equipe: estado.modo === "equipes" ? j.equipe : null,
     };
   });
 }
@@ -394,13 +537,87 @@ function marcarEliminados(estado) {
   });
 }
 
-// Declara vitória de um jogador e congela a partida.
-function declararVitoria(estado, idJogador) {
+// Declara vitória de um jogador e congela a partida. "info" diz como
+// acabou (motivo + detalhes) e fica em estado.resultado para a tela.
+function declararVitoria(estado, idJogador, info) {
   estado.vencedor = idJogador;
   estado.fase = "fim";
+  estado.resultado = info || { motivo: "regioes" };
   estado.ultimoEvento = { tipo: "vitoria", vencedor: idJogador };
-  anotar(estado, estado.jogadores[idJogador].nome + " venceu a partida!");
+  if (estado.modo === "equipes") {
+    const eq = estado.jogadores[idJogador].equipe;
+    estado.resultado.equipe = eq;
+    anotar(estado, "A equipe " + NOMES_EQUIPE[eq] + " venceu a partida!");
+  } else {
+    anotar(estado, estado.jogadores[idJogador].nome + " venceu a partida!");
+  }
   return estado;
+}
+
+// Sobrou um lado só? (um jogador vivo; no Equipes, todos os vivos da mesma equipe)
+function ladoQueSobrou(estado) {
+  const vivos = jogadoresVivos(estado);
+  if (vivos.length === 1) return vivos[0].id;
+  if (estado.modo === "equipes" && vivos.every(function (j) { return j.equipe === vivos[0].equipe; }))
+    return vivos.some(function (j) { return j.id === estado.vez; }) ? estado.vez : vivos[0].id;
+  return null;
+}
+
+// Desempate: aplica os critérios em ordem (cada um: { nome, valor(id) }) até
+// sobrar um. Se ainda empatar, cada um rola 1 d6 (de novo, se empatar).
+// Devolve { vencedor, decidiu (nome do critério que desempatou), dados }.
+function desempatar(ids, criterios) {
+  let restantes = ids.slice(), decidiu = null;
+  for (let i = 0; i < criterios.length && restantes.length > 1; i++) {
+    const c = criterios[i];
+    const melhor = Math.max.apply(null, restantes.map(c.valor));
+    restantes = restantes.filter(function (id) { return c.valor(id) === melhor; });
+    if (restantes.length === 1) decidiu = c.nome;
+  }
+  const dados = [];
+  while (restantes.length > 1) {
+    const rolagem = {};
+    restantes.forEach(function (id) { rolagem[id] = rolarD6(); });
+    dados.push(rolagem);
+    const melhor = Math.max.apply(null, restantes.map(function (id) { return rolagem[id]; }));
+    restantes = restantes.filter(function (id) { return rolagem[id] === melhor; });
+    decidiu = "dados";
+  }
+  return { vencedor: restantes[0], decidiu: decidiu, dados: dados };
+}
+
+// Partida Rápida: fim das rodadas -> conta os pontos e declara o vencedor.
+// Desempate: mais exércitos; depois, 1 d6 cada.
+function finalizarRapida(estado) {
+  const vivos = jogadoresVivos(estado).map(function (j) { return j.id; });
+  const placar = estado.jogadores.map(function (j) {
+    return { id: j.id, pontos: pontosRapida(estado, j.id), territorios: territoriosDe(estado, j.id).length, exercitos: contarExercitos(estado, j.id) };
+  });
+  const d = desempatar(vivos, [
+    { nome: "pontos", valor: function (id) { return placar[id].pontos; } },
+    { nome: "exercitos", valor: function (id) { return placar[id].exercitos; } },
+  ]);
+  anotar(estado, "Fim das " + RODADAS_RAPIDA + " rodadas!");
+  return declararVitoria(estado, d.vencedor, { motivo: "rapida", placar: placar, decidiu: d.decidiu, dados: d.dados });
+}
+
+// Grande Exército: os Vikings caíram -> vence o reino VIVO com mais pontos.
+// Desempate: quem tomou o último território viking; mais territórios; mais
+// exércitos; depois, 1 d6 cada.
+function finalizarGrande(estado) {
+  const vivos = jogadoresVivos(estado).filter(function (j) { return !ehViking(estado, j.id); }).map(function (j) { return j.id; });
+  const placar = estado.jogadores.filter(function (j) { return !ehViking(estado, j.id); }).map(function (j) {
+    return { id: j.id, pontos: j.pontos || 0, vivo: j.vivo, territorios: territoriosDe(estado, j.id).length, exercitos: contarExercitos(estado, j.id) };
+  });
+  const de = function (id) { return placar.filter(function (p) { return p.id === id; })[0]; };
+  const d = desempatar(vivos, [
+    { nome: "pontos", valor: function (id) { return de(id).pontos; } },
+    { nome: "ultimoGolpe", valor: function (id) { return id === estado.ultimoGolpe ? 1 : 0; } },
+    { nome: "territorios", valor: function (id) { return de(id).territorios; } },
+    { nome: "exercitos", valor: function (id) { return de(id).exercitos; } },
+  ]);
+  anotar(estado, "Os vikings foram expulsos!");
+  return declararVitoria(estado, d.vencedor, { motivo: "reinos", placar: placar, decidiu: d.decidiu, dados: d.dados });
 }
 
 
@@ -409,10 +626,27 @@ function declararVitoria(estado, idJogador) {
    ---------------------------------------------------------------- */
 // "jogadores" é uma lista de { nome, tipo } — tipo "humano" ou "bot".
 // Recomendado de 4 a 6, mas funciona de 2 a 6 (bom pra testar).
+//   Grande Exército: sempre 9 assentos, na ordem de REINOS_GRANDE (a lista
+//     dada ocupa os assentos nessa ordem; o que faltar vira bot).
+//   Equipes: 4 ou 6 jogadores; opcoes.tamanhoEquipe = 2 ou 3. O jogo sorteia
+//     as equipes e a sequência (as vezes se alternam entre as equipes).
 function criarPartida(jogadores, opcoes) {
   opcoes = opcoes || {};
+  let modo = MODOS[opcoes.modo] ? opcoes.modo : MODO_PADRAO;
+  let tamEquipe = opcoes.tamanhoEquipe === 3 ? 3 : 2;
+  if (modo === "equipes") {
+    if (!modoDisponivel("equipes", jogadores.length)) modo = MODO_PADRAO;
+    else if (jogadores.length % tamEquipe !== 0 || jogadores.length / tamEquipe < 2) tamEquipe = 2;
+  }
+  if (modo === "grande") {
+    jogadores = REINOS_GRANDE.map(function (r, i) {
+      const j = jogadores[i] || {};
+      return { nome: j.nome || r, tipo: j.tipo || "bot", reino: r, cor: COR_REINO[r] };
+    });
+  }
+  if (modo === "equipes") jogadores = embaralhar(jogadores); // sorteia assentos = equipes + sequência
   const n = jogadores.length;
-  const modo = MODOS[opcoes.modo] ? opcoes.modo : MODO_PADRAO;
+  const nEquipes = n / tamEquipe;
 
   const estado = {
     modo: modo,
@@ -428,6 +662,8 @@ function criarPartida(jogadores, opcoes) {
         eliminadoPor: null,
       };
     }),
+    resultado: null,
+    ultimoGolpe: null,
     vez: 0,
     turno: 1,
     fase: "reforco",
@@ -444,13 +680,24 @@ function criarPartida(jogadores, opcoes) {
     log: [],
   };
 
-  // Distribuição: embaralha os 64 territórios e reparte no rodízio.
-  // As sobras (quando 64 não divide certinho, com 5 ou 6 jogadores)
-  // caem naturalmente nos PRIMEIROS a receber. Cada território entra com 1.
-  const baralho = embaralhar(Object.keys(TERRITORIOS));
-  baralho.forEach(function (t, i) {
-    estado.territorios[t] = { dono: i % n, exercitos: BASE_POR_TERRITORIO };
-  });
+  if (modo === "grande") {
+    // Cada reino começa com a própria região; os Vikings, com INICIO_VIKINGS.
+    estado.jogadores.forEach(function (j) { j.reino = REINOS_GRANDE[j.id]; j.pontos = 0; });
+    Object.keys(TERRITORIOS).forEach(function (t) {
+      const reino = INICIO_VIKINGS.indexOf(t) !== -1 ? VIKINGS : regiaoDe(t);
+      estado.territorios[t] = { dono: REINOS_GRANDE.indexOf(reino), exercitos: EXERCITOS_INICIO_GRANDE[reino] || BASE_POR_TERRITORIO };
+    });
+  } else {
+    // Distribuição: embaralha os 64 territórios e reparte no rodízio.
+    // As sobras (quando 64 não divide certinho, com 5 ou 6 jogadores)
+    // caem naturalmente nos PRIMEIROS a receber. Cada território entra com 1.
+    const baralho = embaralhar(Object.keys(TERRITORIOS));
+    baralho.forEach(function (t, i) {
+      estado.territorios[t] = { dono: i % n, exercitos: BASE_POR_TERRITORIO };
+    });
+  }
+  // Equipes: assento i fica na equipe i % nEquipes (A, B, A, B… ou A, B, C, A, B, C).
+  if (modo === "equipes") estado.jogadores.forEach(function (j) { j.equipe = j.id % nEquipes; });
 
   // Baralho: uma carta por território + os coringas, embaralhado.
   const cartas = Object.keys(TERRITORIOS).map(function (t) { return { t: t, s: simboloDoTerritorio(t) }; });
@@ -467,9 +714,7 @@ function criarPartida(jogadores, opcoes) {
 
   // Primeiro turno já montado: o jogador 0 recebe seu lote de reforços
   // (base = territórios ÷ 3, mínimo 3; + bônus por região completa) para posicionar.
-  const det0 = calcularReforcos(estado, 0);
-  estado.reforco = { base: det0.base, porRegiao: det0.porRegiao, ordem: det0.ordem };
-  estado.reforcosPendentes = det0.total;
+  montarReforco(estado, 0);
   anotar(estado, "Partida criada (modo " + MODOS[modo].nome + "). Territórios distribuídos.");
   return estado;
 }
@@ -485,14 +730,21 @@ function criarPartida(jogadores, opcoes) {
 //           esse bônus fica PRESO à própria região (só entra em território dela).
 //   ordem = as regiões de porRegiao já na ordem fixa (ORDEM_REGIOES_REFORCO),
 //           para a sequência guiada da tela (Modo B).
-//   total = base + soma dos bônus (é o que vai em estado.reforcosPendentes).
+//   mar = Grande Exército: +3 dos Vikings, só em território viking no litoral
+//           (sem litoral, sem os 3). Vem depois das regiões, antes do geral.
+//   total = base + soma dos bônus + mar (é o que vai em estado.reforcosPendentes).
 // Obs.: como x/3 nunca dá ,50 exato (só ,33 ou ,67), o Math.round não
 // tem ambiguidade — ,33 desce e ,67 sobe.
+// No Grande Exército a base é territórios ÷ 2, arredondado para BAIXO (mínimo 3).
 function calcularReforcos(estado, idJogador) {
-  const nTerritorios = territoriosDe(estado, idJogador).length;
-  const base = Math.max(MIN_REFORCO, Math.round(nTerritorios / 3));
+  const meus = territoriosDe(estado, idJogador);
+  const nTerritorios = meus.length;
+  const base = estado.modo === "grande"
+    ? Math.max(MIN_REFORCO, Math.floor(nTerritorios / 2))
+    : Math.max(MIN_REFORCO, Math.round(nTerritorios / 3));
+  const mar = (ehViking(estado, idJogador) && meus.some(function (t) { return TERRITORIOS[t].litoral; })) ? REFORCO_MAR : 0;
 
-  const dominadas = regioesDominadas(estado, idJogador);
+  const dominadas = regioesComBonus(estado, idJogador);
   const porRegiao = {};
   let somaBonus = 0;
   ORDEM_REGIOES_REFORCO.forEach(function (r) {
@@ -503,15 +755,22 @@ function calcularReforcos(estado, idJogador) {
   });
 
   const ordem = ORDEM_REGIOES_REFORCO.filter(function (r) { return porRegiao[r] > 0; });
-  return { base: base, porRegiao: porRegiao, ordem: ordem, total: base + somaBonus };
+  return { base: base, porRegiao: porRegiao, ordem: ordem, mar: mar, total: base + somaBonus + mar };
+}
+
+// Monta o reforço do turno do jogador (estado.reforco + reforcosPendentes).
+function montarReforco(estado, idJogador) {
+  const det = calcularReforcos(estado, idJogador);
+  estado.reforco = { base: det.base, porRegiao: det.porRegiao, ordem: det.ordem, mar: det.mar };
+  estado.reforcosPendentes = det.total;
 }
 
 // Posiciona "qtd" reforços num território do jogador da vez.
 // Restrição (Modo B): o bônus de uma região SÓ pode entrar em território
-// daquela região; o reforço-base (geral) entra em qualquer território seu.
-// Ao posicionar, consome primeiro o bolsão da região do território (o menos
-// flexível) e só depois o geral. A ORDEM guiada é responsabilidade da tela;
-// aqui vale a restrição.
+// daquela região; o do mar (Vikings) só no litoral; o reforço-base (geral)
+// entra em qualquer território seu. Ao posicionar, consome primeiro o bolsão
+// da região do território (o menos flexível), depois o do mar e só então o
+// geral. A ORDEM guiada é responsabilidade da tela; aqui vale a restrição.
 function posicionarReforco(estado, territorio, qtd) {
   if (qtd == null) qtd = 1;
   if (estado.fase !== "reforco")
@@ -528,10 +787,13 @@ function posicionarReforco(estado, territorio, qtd) {
   const rf = estado.reforco || { base: estado.reforcosPendentes, porRegiao: {}, ordem: [] };
   const regiao = regiaoDe(territorio);
   const daRegiao = (rf.porRegiao && rf.porRegiao[regiao]) || 0;
-  const disponivel = daRegiao + rf.base;
+  const doMar = TERRITORIOS[territorio].litoral ? (rf.mar || 0) : 0;
+  const disponivel = daRegiao + doMar + rf.base;
   if (qtd > disponivel) {
-    if (daRegiao < qtd && rf.base < qtd && daRegiao === 0)
-      return { ok: false, erro: "Você só tem " + rf.base + " de reforço geral para posicionar." };
+    if (daRegiao === 0 && doMar === 0)
+      return { ok: false, erro: rf.mar && !TERRITORIOS[territorio].litoral
+        ? "O reforço do mar só entra em território no litoral."
+        : "Você só tem " + rf.base + " de reforço geral para posicionar." };
     return { ok: false, erro: "Não há reforço suficiente para " + territorio + " (máximo " + disponivel + ")." };
   }
 
@@ -543,12 +805,14 @@ function posicionarReforco(estado, territorio, qtd) {
     restante -= usarRegiao;
     if (rf.porRegiao[regiao] <= 0) delete rf.porRegiao[regiao];
   }
+  const usarMar = Math.min(doMar, restante);
+  if (usarMar > 0) { rf.mar -= usarMar; restante -= usarMar; }
   if (restante > 0) { rf.base -= restante; restante = 0; }
 
   alvo.exercitos += qtd;
   estado.reforcosPendentes -= qtd;
   estado.ultimoEvento = { tipo: "reforco", territorio: territorio, qtd: qtd, restante: estado.reforcosPendentes };
-  checarObjetivo(estado);
+  checarNaHora(estado);
   return { ok: true, restante: estado.reforcosPendentes };
 }
 
@@ -611,7 +875,7 @@ function trocarCartas(estado, indices) {
   anotar(estado, j.nome + " trocou cartas: +" + valor + " exércitos" +
     (bonusEm.length ? " (+" + BONUS_TERRITORIO_TROCA + " em " + bonusEm.join(", ") + ")" : "") + ".");
   estado.ultimoEvento = { tipo: "troca", valor: valor, bonusEm: bonusEm };
-  checarObjetivo(estado);
+  checarNaHora(estado);
   return { ok: true, valor: valor, bonusEm: bonusEm, proxima: valorDaTroca(estado.trocasFeitas) };
 }
 
@@ -654,6 +918,8 @@ function atacar(estado, origem, destino, opcoes) {
     return { ok: false, erro: "O território de origem não é seu." };
   if (d.dono === estado.vez)
     return { ok: false, erro: "Não dá para atacar um território seu." };
+  if (saoAliados(estado, estado.vez, d.dono))
+    return { ok: false, erro: "Não dá para atacar seu parceiro de equipe." };
   if (vizinhosDe(origem).indexOf(destino) === -1)
     return { ok: false, erro: origem + " e " + destino + " não são vizinhos." };
   if (a.exercitos < 2)
@@ -677,6 +943,17 @@ function atacar(estado, origem, destino, opcoes) {
 
   a.exercitos -= perdasAtacante;
   d.exercitos -= perdasDefensor;
+
+  // Grande Exército: cada exército viking derrotado vale 1 ponto para o reino
+  // que o derrotou (no ataque ou na defesa).
+  let pontosGanhos = 0;
+  if (estado.modo === "grande") {
+    if (ehViking(estado, d.dono) && !ehViking(estado, estado.vez)) {
+      pontosGanhos = perdasDefensor;
+      estado.jogadores[estado.vez].pontos += perdasDefensor;
+    }
+    else if (ehViking(estado, estado.vez) && !ehViking(estado, d.dono)) estado.jogadores[d.dono].pontos += perdasAtacante;
+  }
 
   let conquistou = false;
   let exercitosMovidos = 0;
@@ -704,10 +981,16 @@ function atacar(estado, origem, destino, opcoes) {
       vitima.cartas = [];
       anotar(estado, estado.jogadores[estado.vez].nome + " ficou com " + herdadas + " carta(s) de " + vitima.nome + ".");
     }
-    // Se sobrou um só jogador vivo, a partida acaba na hora.
-    if (jogadoresVivos(estado).length === 1)
-      declararVitoria(estado, jogadoresVivos(estado)[0].id);
-    else checarObjetivo(estado);
+    // Grande Exército: os Vikings caíram -> fim, vence o reino com mais pontos.
+    if (ehViking(estado, donoAntigo) && !vitima.vivo) {
+      estado.ultimoGolpe = estado.vez;
+      finalizarGrande(estado);
+    } else {
+      // Se sobrou um lado só (um jogador, ou uma equipe), a partida acaba na hora.
+      const lado = ladoQueSobrou(estado);
+      if (lado !== null) declararVitoria(estado, lado, { motivo: "ultimo" });
+      else checarNaHora(estado);
+    }
   }
 
   estado.ultimoEvento = {
@@ -721,6 +1004,7 @@ function atacar(estado, origem, destino, opcoes) {
     dadosAtaque: dadosAtaque, dadosDefesa: dadosDefesa,
     perdasAtacante: perdasAtacante, perdasDefensor: perdasDefensor,
     conquistou: conquistou, exercitosMovidos: exercitosMovidos,
+    pontos: pontosGanhos,        // Grande Exército: pontos que o atacante ganhou nesta rolagem
     // com opcoes.escolher: até quantos exércitos podem ficar no conquistado
     podeFicarAte: estado.conquista ? Math.min(MAX_MOVER_CONQUISTA, d.exercitos + a.exercitos - 1) : null,
   };
@@ -740,7 +1024,7 @@ function moverNaConquista(estado, total) {
   d.exercitos += extra;
   estado.conquista = null;
   estado.ultimoEvento = { tipo: "conquistaMovida", origem: c.origem, destino: c.destino, total: total };
-  checarObjetivo(estado);
+  checarNaHora(estado);
   return { ok: true, origem: c.origem, destino: c.destino, total: total };
 }
 
@@ -796,7 +1080,7 @@ function remanejar(estado, origem, destino, qtd) {
   // (só saíram exércitos frescos; os já-travados continuam contados lá).
   estado.movidos[destino] = ((estado.movidos && estado.movidos[destino]) || 0) + qtd;
   estado.ultimoEvento = { tipo: "remanejo", origem: origem, destino: destino, qtd: qtd };
-  checarObjetivo(estado);
+  checarNaHora(estado);
   return { ok: true };
 }
 
@@ -818,16 +1102,17 @@ function passarVez(estado) {
   if (estado.conquistouNoTurno) carta = comprarCarta(estado, estado.vez);
   estado.conquistouNoTurno = false;
 
-  // Vitória do jogador da vez? (pela condição do modo: 5 regiões ou objetivo)
+  // Vitória do jogador da vez? (pela condição do modo: regiões, objetivo, meta viking)
   if (verificarVitoria(estado, estado.vez)) {
-    declararVitoria(estado, estado.vez);
+    const motivo = { classico: "objetivo", grande: "vikings", equipes: "equipeRegioes" }[estado.modo] || "regioes";
+    declararVitoria(estado, estado.vez, { motivo: motivo });
     return { ok: true, vencedor: estado.vez, carta: carta };
   }
-  // Sobrou um só jogador? (vitória por "último de pé")
-  if (jogadoresVivos(estado).length === 1) {
-    const ultimo = jogadoresVivos(estado)[0].id;
-    declararVitoria(estado, ultimo);
-    return { ok: true, vencedor: ultimo, carta: carta };
+  // Sobrou um lado só? (vitória por "último de pé")
+  const lado = ladoQueSobrou(estado);
+  if (lado !== null) {
+    declararVitoria(estado, lado, { motivo: "ultimo" });
+    return { ok: true, vencedor: lado, carta: carta };
   }
 
   // Procura o próximo jogador VIVO, no sentido horário.
@@ -840,12 +1125,17 @@ function passarVez(estado) {
     voltas++;
   } while (!estado.jogadores[proximo].vivo && voltas <= total);
 
+  // Partida Rápida: acabou a última rodada -> conta os pontos.
+  if (estado.modo === "rapida" && estado.turno > RODADAS_RAPIDA) {
+    estado.turno = RODADAS_RAPIDA;
+    finalizarRapida(estado);
+    return { ok: true, vencedor: estado.vencedor, carta: carta };
+  }
+
   estado.vez = proximo;
   estado.fase = "reforco";
   estado.movidos = {};                 // zera o controle de remanejamento
-  const det = calcularReforcos(estado, proximo);
-  estado.reforco = { base: det.base, porRegiao: det.porRegiao, ordem: det.ordem };
-  estado.reforcosPendentes = det.total;
+  montarReforco(estado, proximo);
   estado.ultimoEvento = { tipo: "novaVez", jogador: proximo, reforcos: estado.reforcosPendentes };
   return { ok: true, vez: proximo, reforcos: estado.reforcosPendentes, carta: carta };
 }

@@ -30,6 +30,8 @@
    AUXILIARES DE DECISÃO (a "cabeça" do bot):
        botAtaqueBom(exAtq, exDef) — a matemática dos dados (vale atacar?)
        botValorAlvo(estado, id, alvo) — quanto vale conquistar tal território
+       botAlvos(estado, id, t)   — vizinhos que o bot aceita atacar
+                                   (no Grande Exército, os reinos só miram os vikings)
    ============================================================ */
 
 
@@ -72,6 +74,24 @@ function botAtaqueBom(exAtq, exDef) {
 
 
 /* ----------------------------------------------------------------
+   QUEM O BOT ACEITA ATACAR
+   ----------------------------------------------------------------
+   Em geral, qualquer inimigo vizinho (o motor já tira o parceiro no modo
+   Equipes). No Grande Exército, um reino-bot só ataca os Vikings: os reinos
+   podem se atacar pela regra, mas o bot não trai (pedido de Kauã: não forçar).
+   A "frente" do bot é onde ele tem alvo — é para lá que vão reforço e tropa.
+   ---------------------------------------------------------------- */
+function botAlvos(estado, id, t) {
+  const alvos = inimigosVizinhos(estado, t);
+  if (estado.modo !== "grande" || ehViking(estado, id)) return alvos;
+  return alvos.filter(function (v) { return ehViking(estado, estado.territorios[v].dono); });
+}
+function botFrente(estado, id, t) {
+  return botAlvos(estado, id, t).length > 0;
+}
+
+
+/* ----------------------------------------------------------------
    VALOR DE CONQUISTAR UM TERRITÓRIO INIMIGO
    ----------------------------------------------------------------
    Quanto MAIOR o número, mais o bot quer aquele território. A ordem
@@ -85,9 +105,11 @@ function botValorAlvo(estado, id, alvo) {
   const r = regiaoDe(alvo);
   const terrs = territoriosDaRegiao(r);
   // Quantos territórios desta região AINDA não são meus (o "alvo" é um deles).
+  // No modo Equipes, os do parceiro contam como "já fechados".
   let restantes = 0;
   for (let i = 0; i < terrs.length; i++) {
-    if (estado.territorios[terrs[i]].dono !== id) restantes++;
+    const dono = estado.territorios[terrs[i]].dono;
+    if (dono !== id && !saoAliados(estado, id, dono)) restantes++;
   }
 
   let v = 10; // valor-base de simplesmente expandir
@@ -111,8 +133,23 @@ function botValorAlvo(estado, id, alvo) {
 
   // Modo Clássico: puxa para o que o objetivo secreto pede.
   if (estado.modo === "classico") v += botBonusObjetivo(estado, id, alvo, donoAlvo);
+  // Grande Exército: Vikings miram as 4 regiões da meta; reinos, os Vikings.
+  if (estado.modo === "grande") v += botBonusGrande(estado, id, alvo, donoAlvo);
 
   return v;
+}
+
+// Quanto um alvo ajuda no Grande Exército.
+function botBonusGrande(estado, id, alvo, donoAlvo) {
+  if (ehViking(estado, id)) {
+    const r = regiaoDe(alvo);
+    if (META_VIKINGS.indexOf(r) === -1) return 0;
+    const meus = territoriosDaRegiao(r).filter(function (t) { return estado.territorios[t].dono === id; }).length;
+    return 60 + meus * 8;
+  }
+  if (!ehViking(estado, donoAlvo)) return 0;
+  // cada exército viking derrubado é ponto; quase no fim, vale o golpe final
+  return 60 + (territoriosDe(estado, donoAlvo).length <= 3 ? 200 : 0);
 }
 
 // Quanto um alvo ajuda o objetivo secreto do bot (modo Clássico).
@@ -179,6 +216,16 @@ function botReforcar(estado) {
     if (rr.ok) colocados += qtd;
   });
 
+  // (1b) MAR (Vikings, Grande Exército) — na melhor frente do litoral.
+  if (rf.mar > 0) {
+    const litoral = territoriosDe(estado, id).filter(function (t) { return TERRITORIOS[t].litoral; });
+    const alvo = botMelhorTerritorioPraReforco(estado, id, litoral);
+    if (alvo) {
+      const qtd = rf.mar;
+      if (posicionarReforco(estado, alvo, qtd).ok) colocados += qtd;
+    }
+  }
+
   // (2) REFORÇO-BASE (geral) — o que sobrou (== reforcosPendentes) nas fronteiras.
   if (estado.reforcosPendentes > 0) {
     colocados += botEspalharGeral(estado, id, estado.reforcosPendentes);
@@ -193,12 +240,12 @@ function botReforcar(estado) {
 function botMelhorTerritorioPraReforco(estado, id, lista) {
   const meus = lista.filter(function (t) { return estado.territorios[t].dono === id; });
   if (meus.length === 0) return null;
-  const front = meus.filter(function (t) { return ehFronteira(estado, t); });
+  const front = meus.filter(function (t) { return botFrente(estado, id, t); });
   const cand = front.length ? front : meus;
   let alvo = cand[0], melhorV = -Infinity;
   cand.forEach(function (t) {
     let v;
-    const alvos = inimigosVizinhos(estado, t);
+    const alvos = botAlvos(estado, id, t);
     if (alvos.length) {
       v = -Infinity;
       for (let i = 0; i < alvos.length; i++) {
@@ -218,7 +265,7 @@ function botMelhorTerritorioPraReforco(estado, id, lista) {
 // então aqui o estado já reflete essas tropas.
 function botEspalharGeral(estado, id, total) {
   const meus = territoriosDe(estado, id);
-  const fronteiras = meus.filter(function (t) { return ehFronteira(estado, t); });
+  const fronteiras = meus.filter(function (t) { return botFrente(estado, id, t); });
 
   // Sem nenhuma fronteira: empilha onde já tenho mais tropa e segue o jogo.
   if (fronteiras.length === 0) {
@@ -231,7 +278,7 @@ function botEspalharGeral(estado, id, total) {
   }
 
   const infos = fronteiras.map(function (t) {
-    const alvos = inimigosVizinhos(estado, t);
+    const alvos = botAlvos(estado, id, t);
     let melhorV = -Infinity, exDefMelhor = 1;
     for (let i = 0; i < alvos.length; i++) {
       const vv = botValorAlvo(estado, id, alvos[i]);
@@ -280,6 +327,13 @@ function botDrenarReforco(estado, id) {
       delete rf.porRegiao[r];
       continue;
     }
+    if (rf.mar > 0) {
+      const litoral = territoriosDe(estado, id).filter(function (t) { return TERRITORIOS[t].litoral; });
+      if (litoral.length && posicionarReforco(estado, litoral[0], rf.mar).ok) continue;
+      estado.reforcosPendentes -= rf.mar; // sem litoral (estado estranho): descarta
+      rf.mar = 0;
+      continue;
+    }
     const meus = territoriosDe(estado, id);
     if (meus.length === 0) break;
     const rr = posicionarReforco(estado, meus[0], estado.reforcosPendentes);
@@ -312,7 +366,7 @@ function botAtacar(estado) {
       const o = meus[i];
       const exA = estado.territorios[o].exercitos;
       if (exA < 3) continue;                 // fraco demais pra atacar bem
-      const alvos = inimigosVizinhos(estado, o);
+      const alvos = botAlvos(estado, id, o);
       for (let k = 0; k < alvos.length; k++) {
         const e = alvos[k];
         const exD = estado.territorios[e].exercitos;
@@ -360,7 +414,7 @@ function botRemanejar(estado) {
     // Origens: meus territórios NÃO-fronteira, com tropa FRESCA sobrando
     // (>= 1 fresco e total >= 2, para poder deixar 1 para trás).
     const origens = meus.filter(function (t) {
-      return !ehFronteira(estado, t) &&
+      return !botFrente(estado, id, t) &&
              estado.territorios[t].exercitos >= 2 &&
              frescosEm(estado, t) >= 1;
     });
@@ -373,12 +427,12 @@ function botRemanejar(estado) {
       vizinhosDe(o).forEach(function (dst) {
         if (estado.territorios[dst].dono !== id) return; // destino tem de ser meu
         let rank = 0;
-        if (ehFronteira(estado, dst)) {
+        if (botFrente(estado, id, dst)) {
           rank = 2;
         } else {
           const vizs = vizinhosDe(dst);
           for (let i = 0; i < vizs.length; i++) {
-            if (estado.territorios[vizs[i]].dono === id && ehFronteira(estado, vizs[i])) { rank = 1; break; }
+            if (estado.territorios[vizs[i]].dono === id && botFrente(estado, id, vizs[i])) { rank = 1; break; }
           }
         }
         if (rank === 0) return;
@@ -448,7 +502,7 @@ function jogarTurnoBot(estado) {
       return { ok: true, jogador: jogador, acoes: acoes, vencedor: estado.vencedor };
   }
 
-  // (4) Passa a vez (o motor checa vitória por 5 regiões aqui).
+  // (4) Passa a vez (o motor checa a vitória do modo aqui).
   const fim = passarVez(estado);
 
   return {

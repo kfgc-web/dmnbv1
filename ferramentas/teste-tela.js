@@ -1,7 +1,8 @@
 /* ============================================================
    DOMINATION: BRITANNIA — ferramentas/teste-tela.js
    Teste da TELA num navegador de verdade (Chromium, via Playwright).
-   Abre o jogo, joga um pouco e confere as partes principais.
+   Abre o jogo, joga um pouco e confere as partes principais — inclusive
+   os modos Grande Exército, Equipes e Partida Rápida.
    Rodar antes de entregar qualquer mudança na tela.
 
    Uso (na raiz do repositório):
@@ -56,6 +57,10 @@ async function abrir(browser, viewport) {
   await p.waitForTimeout(300);
   return p;
 }
+const disco2 = async function (pg, nome) {
+  const nomes = await pg.$$eval(".node .terr", function (ts) { return ts.map(function (t) { return t.textContent; }); });
+  return (await pg.$$(".node .disc"))[nomes.indexOf(nome)];
+};
 const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: path.join(PASTA_PRINTS, nome + ".png") }); };
 
 (async function () {
@@ -67,8 +72,19 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     // ---------- computador ----------
     console.log("\nComputador (1400 x 1000)");
     const p = await abrir(browser, { width: 1400, height: 1000 });
-    const modos = await p.$$eval(".modoOpcao b", function (x) { return x.map(function (e) { return e.textContent; }); });
-    checar("tela de início mostra os 3 modos", modos.length === 3, modos.join(", "));
+    const modosVisiveis = function (pg) {
+      return pg.$$eval(".modoOpcao", function (x) { return x.filter(function (e) { return e.offsetParent !== null; }).map(function (e) { return e.dataset.modo; }); });
+    };
+    const modos = await modosVisiveis(p);
+    checar("tela de início mostra os 6 modos (com 4 jogadores)", modos.length === 6, modos.join(", "));
+    await p.click("#advPlus");
+    checar("com 5 jogadores o modo Equipes some", (await modosVisiveis(p)).indexOf("equipes") === -1);
+    await p.click("#advPlus");
+    await p.click('.modoOpcao[data-modo="equipes"]');
+    const fmts = await p.$$eval(".formatoOpcao", function (b) { return b.map(function (x) { return x.textContent; }); });
+    checar("com 6 jogadores, Equipes oferece 3×3 e 2×2×2", fmts.length === 2, fmts.join(" / "));
+    await p.click("#advMinus"); await p.click("#advMinus");
+    await p.click('.modoOpcao[data-modo="classico"]');
     await print(p, "01-inicio");
     await p.click("#startBtn"); await p.waitForTimeout(400);
     const e0 = await p.evaluate(function () { const e = window.__e(); return { modo: e.modo, obj: e.jogadores[0].objetivo && e.jogadores[0].objetivo.nome }; });
@@ -156,6 +172,105 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     checar("bots jogam e a vez volta para você", (await q.$eval("#turnWho", function (e) { return e.textContent; })) === "Você");
     checar("nenhum erro no console (partida)", q.erros.length === 0, q.erros.join(" | "));
 
+    // ---------- Grande Exército ----------
+    console.log("\nGrande Exército");
+    const g = await abrir(browser, { width: 1400, height: 1000 });
+    await g.click('.modoOpcao[data-modo="grande"]');
+    checar("no Grande Exército some o nº de adversários", await g.$eval("#advField", function (e) { return e.style.display === "none"; }));
+    checar("escolha de lado com 9 opções", (await g.$$(".ladoOpcao")).length === 9);
+    await g.click('.ladoOpcao[data-lado="Vikings"]');
+    await print(g, "07-inicio-grande");
+    await g.click("#startBtn"); await g.waitForTimeout(400);
+    const eg = await g.evaluate(function () {
+      const e = window.__e();
+      return { n: e.jogadores.length, humano: e.jogadores[0].tipo, reino: e.jogadores[0].reino, pend: e.reforcosPendentes, mar: e.reforco.mar,
+        eof: e.territorios.Eoforwic.exercitos, grant: e.territorios.Grantebrycge.exercitos, beb: e.territorios.Bebbanburg.exercitos };
+    });
+    checar("9 lugares, você nos Vikings, começo 7/3/2", eg.n === 9 && eg.humano === "humano" && eg.reino === "Vikings" && eg.eof === 7 && eg.grant === 3 && eg.beb === 2, JSON.stringify(eg));
+    checar("reforço viking = 3 + 3 do mar", eg.pend === 6 && eg.mar === 3);
+    checar("painel mostra o lado", (await g.$eval("#objetivoBox", function (e) { return e.innerText; })).indexOf("Vikings") >= 0);
+    // posiciona até chegar no bolsão do mar e confere que só o litoral acende
+    let viuMar = false, marSoLitoral = true;
+    for (let k = 0; k < 20 && (await g.$eval("#phaseTag", function (e) { return e.textContent; })) === "Reforço"; k++) {
+      const info = await g.evaluate(function () {
+        const r = document.getElementById("reinf").textContent;
+        const nomes = Array.from(document.querySelectorAll(".node .terr")).map(function (t) { return t.textContent; });
+        const dest = Array.from(document.querySelectorAll("path.territorio")).map(function (x, i) { return x.classList.contains("dest") ? i : -1; }).filter(function (i) { return i >= 0; });
+        return { mar: r.indexOf("mar") >= 0, dest: dest, litoral: dest.every(function (i) { return TERRITORIOS[nomes[i]].litoral; }) };
+      });
+      if (info.mar) { viuMar = true; if (!info.litoral) marSoLitoral = false; }
+      if (!info.dest.length) { await g.waitForTimeout(300); continue; }
+      await (await g.$$(".node .disc"))[info.dest[0]].click({ force: true });
+      await g.waitForTimeout(40);
+    }
+    checar("bolsão do mar aparece e acende só o litoral", viuMar && marSoLitoral);
+    await print(g, "08-grande");
+    // vikings caem -> placar dos reinos
+    await g.evaluate(function () {
+      const e = window.__e();
+      e.jogadores[3].pontos = 12; e.jogadores[4].pontos = 12; e.ultimoGolpe = 4;
+      Object.keys(e.territorios).forEach(function (t) { if (e.territorios[t].dono === 0) e.territorios[t].dono = 3; });
+      e.jogadores[0].vivo = false; finalizarGrande(e); window.__render();
+    });
+    await g.waitForTimeout(1300);
+    const fimG = await g.evaluate(function () { return { linhas: document.querySelectorAll(".placar tr").length, txt: document.querySelector(".modal").innerText, venc: window.__e().vencedor }; });
+    checar("vikings expulsos: placar dos 8 reinos e desempate pelo último golpe", fimG.linhas === 9 && fimG.venc === 4 && fimG.txt.indexOf("último território viking") >= 0, fimG.linhas + " linhas, vencedor " + fimG.venc);
+    await print(g, "09-grande-fim");
+    checar("nenhum erro no console (Grande Exército)", g.erros.length === 0, g.erros.join(" | "));
+
+    // jogando com um reino: os bots (Vikings primeiro) jogam e a vez chega em você
+    const g2 = await abrir(browser, { width: 1400, height: 1000 });
+    await g2.click('.modoOpcao[data-modo="grande"]'); await g2.click('.ladoOpcao[data-lado="Mierce"]'); await g2.click("#startBtn");
+    for (let w = 0; w < 80 && (await g2.$eval("#turnWho", function (e) { return e.textContent; })) !== "Você · Mierce"; w++) await g2.waitForTimeout(250);
+    checar("como Mierce, a vez chega depois dos Vikings, East Engle e Northhymbre", (await g2.$eval("#turnWho", function (e) { return e.textContent; })) === "Você · Mierce" &&
+      (await g2.evaluate(function () { return window.__e().vez; })) === 3);
+    checar("placar de pontos na lista de jogadores", (await g2.$$eval(".prow .rg", function (x) { return x.filter(function (e) { return e.textContent.indexOf("pts") >= 0; }).length; })) === 8);
+    checar("nenhum erro no console (Grande Exército com bots)", g2.erros.length === 0, g2.erros.join(" | "));
+
+    // ---------- Equipes ----------
+    console.log("\nEquipes");
+    const eqp = await abrir(browser, { width: 1400, height: 1000 });
+    await eqp.click('.modoOpcao[data-modo="equipes"]'); await eqp.click("#startBtn");
+    for (let w = 0; w < 80 && (await eqp.$eval("#turnWho", function (e) { return e.textContent; })) !== "Você"; w++) await eqp.waitForTimeout(250);
+    const ee = await eqp.evaluate(function () {
+      const e = window.__e();
+      const eu = e.jogadores.findIndex(function (j) { return j.tipo === "humano"; });
+      const badges = Array.from(document.querySelectorAll(".eqBadge")).filter(function (b) { return b.style.display !== "none"; }).length;
+      return { eu: eu, equipes: e.jogadores.map(function (j) { return j.equipe; }).join(""), badges: badges };
+    });
+    checar("2×2 com equipes alternadas (A, B, A, B)", ee.equipes === "0101", ee.equipes);
+    checar("marquinha da equipe em todas as peças", ee.badges === 64, ee.badges);
+    await print(eqp, "10-equipes");
+    // atacar o parceiro é bloqueado
+    const parceiro = await eqp.evaluate(function () {
+      const e = window.__e(); const eu = e.jogadores.findIndex(function (j) { return j.tipo === "humano"; });
+      const par = e.jogadores.findIndex(function (j) { return j.equipe === e.jogadores[eu].equipe && j.id !== eu; });
+      e.fase = "ataque"; e.reforcosPendentes = 0; e.reforco = { base: 0, porRegiao: {}, ordem: [], mar: 0 };
+      e.territorios.Lundenburg.dono = eu; e.territorios.Lundenburg.exercitos = 9;
+      e.territorios.Cent.dono = par; e.territorios.Cent.exercitos = 1;
+      window.__render(); return par;
+    });
+    await (await disco2(eqp, "Lundenburg")).click({ force: true }); await eqp.waitForTimeout(80);
+    await (await disco2(eqp, "Cent")).click({ force: true }); await eqp.waitForTimeout(200);
+    const aposParceiro = await eqp.evaluate(function () { return { dono: window.__e().territorios.Cent.dono, toast: document.getElementById("toast").textContent }; });
+    checar("não dá para atacar o parceiro", aposParceiro.dono === parceiro && aposParceiro.toast.indexOf("parceiro") >= 0, aposParceiro.toast);
+    await eqp.evaluate(function () { const e = window.__e(); declararVitoria(e, e.vez, { motivo: "equipeRegioes" }); window.__render(); });
+    await eqp.waitForTimeout(1300);
+    checar("vitória mostra a equipe", /Equipe [AB]|sua equipe/.test(await eqp.$eval(".modal", function (e) { return e.innerText; })));
+    checar("nenhum erro no console (Equipes)", eqp.erros.length === 0, eqp.erros.join(" | "));
+
+    // ---------- Partida Rápida ----------
+    console.log("\nPartida Rápida");
+    const r = await abrir(browser, { width: 1400, height: 1000 });
+    await r.click('.modoOpcao[data-modo="rapida"]'); await r.click("#startBtn"); await r.waitForTimeout(300);
+    checar("fase mostra a rodada (1 de 15)", (await r.$eval("#phaseTag", function (e) { return e.textContent; })).indexOf("Rodada 1 de 15") >= 0);
+    checar("painel mostra seus pontos", (await r.$eval("#objetivoBox", function (e) { return e.innerText; })).indexOf("Seus pontos") >= 0);
+    await r.evaluate(function () { finalizarRapida(window.__e()); window.__render(); });
+    await r.waitForTimeout(1300);
+    checar("fim das rodadas mostra o placar", (await r.$$(".placar tr")).length === 5);
+    await print(r, "11-rapida-fim");
+    checar("nenhum erro no console (Partida Rápida)", r.erros.length === 0, r.erros.join(" | "));
+
     // ---------- celular ----------
     console.log("\nCelular (390 x 844)");
     const c = await abrir(browser, { width: 390, height: 844 });
@@ -171,6 +286,10 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     checar("painel rola como uma página só", cel.internas === 0, cel.internas + " rolagens internas");
     await print(c, "06-celular");
     checar("nenhum erro no console (celular)", c.erros.length === 0, c.erros.join(" | "));
+    const c2 = await abrir(browser, { width: 390, height: 844 });
+    await c2.click('.modoOpcao[data-modo="grande"]');
+    checar("início do Grande Exército cabe no celular", await c2.evaluate(function () { return document.documentElement.scrollWidth <= innerWidth; }));
+    await print(c2, "12-celular-grande");
   } finally {
     await browser.close();
     servidor.close();

@@ -89,7 +89,7 @@
   }
   .turnbox{ padding:14px 16px; border-bottom:1px solid var(--line); }
   .turnrow{ display:flex; align-items:center; gap:9px; }
-  .dot{ width:14px; height:14px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 2px #0c0f14; }
+  .dot{ width:14px; height:14px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 2px #0c0f14, 0 0 0 3px rgba(203,184,146,.35); }
   .turnrow .who{ font-weight:600; font-size:15px; }
   .phasetag{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--bone);
     margin-top:8px; }
@@ -203,6 +203,39 @@
   .objRev{ display:flex; gap:8px; align-items:flex-start; line-height:1.4; }
   .objRev .dot{ margin-top:3px; }
   .objRev i{ color:var(--muted); display:block; }
+
+  /* ---------- modos novos: opções de início ---------- */
+  .modoExtra{ margin:0 0 16px; }
+  .modoExtra .flabel{ font-size:14px; margin-bottom:8px; }
+  .formatos{ display:flex; gap:8px; }
+  .formatoOpcao{ flex:1; font-family:"Cinzel",serif; font-size:15px; padding:10px; }
+  .formatoOpcao.sel, .ladoOpcao.sel{ border-color:var(--bone); background:#2a2418; box-shadow:0 0 0 1px var(--bone) inset; }
+  .lados{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .ladoOpcao{ display:flex; align-items:center; gap:6px; padding:8px; font-size:12.5px; text-align:left; }
+  .ladoOpcao .dot{ width:12px; height:12px; }
+  .extraNota{ font-size:12px; color:var(--muted); line-height:1.45; margin:8px 0 0; }
+  @media (max-width:520px){ .lados{ grid-template-columns:repeat(2, 1fr); } }
+
+  /* ---------- equipes: marquinha nas peças e no painel ---------- */
+  .eqBadge circle{ fill:var(--bone); stroke:#0c0f14; stroke-width:1.4; }
+  .eqBadge text{ font-size:8px; font-weight:800; fill:#15110a; text-anchor:middle; dominant-baseline:central; }
+  .eqBadge{ pointer-events:none; }
+  .eqTag{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%;
+    background:var(--bone); color:#15110a; font-size:10px; font-weight:800; flex-shrink:0; font-family:Inter,system-ui,sans-serif; }
+  .objNome .eqTag{ vertical-align:1px; margin-right:4px; }
+
+  /* ---------- placar do fim (Partida Rápida, Grande Exército) ---------- */
+  .modal.modalVitoria{ max-height:94vh; overflow:auto; }
+  .placar{ width:100%; border-collapse:collapse; font-size:12.5px; margin:0 0 12px; font-variant-numeric:tabular-nums; }
+  .placar th{ font-weight:600; color:var(--muted); font-size:11px; text-align:right; padding:4px 6px; }
+  .placar td{ padding:5px 6px; border-top:1px solid var(--line); text-align:right; }
+  .placar td:first-child{ text-align:left; }
+  .placar td:first-child .dot{ display:inline-block; width:11px; height:11px; margin-right:7px; vertical-align:-1px; }
+  .placar tr.venc td{ color:var(--bone); font-weight:700; }
+  .placar tr.fora td{ opacity:.55; }
+  .placar i{ color:var(--muted); font-weight:400; }
+  .desempate{ font-size:12.5px; color:var(--muted); margin:0 0 18px; line-height:1.45; }
+  .desempate b{ color:var(--bone); }
 
   /* ---------- painel recolhido ---------- */
   .painelRecolhido #panel .objetivobox,
