@@ -68,7 +68,7 @@ const ANCORAS = {
   "Northworthig": [[52.95, -1.6]],
   "Doneceaster": [[53.4, -1.5]],
   "Snotingaham": [[53.05, -1.05], [53.6, -0.95]],
-  "Lindcylene": [[53.25, -0.4]],
+  "Lindcylene": [[53.25, -0.4], [53.6, -0.75]],
   "Ligeraceaster": [[52.65, -1.15]],
   // Cymru
   "Gwynedd": [[52.95, -3.95]],
@@ -78,7 +78,7 @@ const ANCORAS = {
   // Northhymbre
   "Rippel": [[53.8, -2.75]],
   "Mameceaster": [[53.5, -2.2], [53.8, -1.55]],
-  "Eoforwic": [[53.85, -0.5], [53.75, -0.9]],
+  "Eoforwic": [[53.85, -0.5], [53.75, -0.9], [53.7, -0.8]],
   "Streoneshalh": [[54.3, -1.4]],
   "Bebbanburg": [[55.1, -1.65], [55.55, -1.8]],
   "Hagustaldesham": [[54.85, -2.3]],
@@ -87,7 +87,7 @@ const ANCORAS = {
   "Mailros": [[55.45, -2.8], [55.15, -2.8]],
   // Dál Riata
   "Hwiterne": [[54.95, -4.4], [55.0, -3.3]],
-  "Alt Clut": [[55.8, -4.3]],
+  "Alt Clut": [[55.8, -4.3], [56.05, -4.6]],
   "Daire": [[55.0, -7.1]],
   "Ard Sratha": [[54.6, -7.3], [54.62, -6.75]],
   "Beannchar": [[54.6, -6.0]],
@@ -95,7 +95,7 @@ const ANCORAS = {
   // Alba
   "Sgáin": [[56.45, -3.1], [56.2, -3.1]],
   "Fothuirtabaicht": [[56.3, -4.1], [56.8, -3.8]],
-  "Dún Att": [[56.1, -5.3], [56.6, -4.5]],
+  "Dún Att": [[56.1, -5.3], [56.6, -4.5], [56.2, -4.85]],
   "Gleann Comhann": [[56.75, -5.1]],
   "Inbhir Nis": [[57.4, -4.2]],
   "Dún Foithir": [[57.1, -2.4], [57.0, -3.2]],
@@ -105,7 +105,7 @@ const ANCORAS = {
   // Ériu
   "Ráth Bhoth": [[54.95, -7.9]],
   "Droim Chliabh": [[54.2, -8.5]],
-  "Cruachan": [[53.85, -8.2], [53.75, -7.8], [54.3, -7.2], [54.45, -6.72]],
+  "Cruachan": [[53.85, -8.2], [53.75, -7.8], [54.3, -7.2]],
   "Mainistir Bhuithe": [[53.95, -6.6], [54.35, -6.45]],
   "Dyflin": [[53.4, -6.4], [53.55, -7.2]],
   "Achadh Bhó": [[53.0, -7.3], [52.8, -6.25], [52.8, -7.9]],
@@ -113,8 +113,8 @@ const ANCORAS = {
   "Lios Mór": [[52.2, -7.5]],
   "Corcach": [[51.85, -8.6]],
   "Mungairit": [[52.45, -8.4], [52.5, -8.0]],
-  "Inis Faithlinn": [[52.05, -9.6]],
-  "Inis Cealtra": [[52.85, -9.0], [52.95, -8.3]],
+  "Inis Faithlinn": [[52.05, -9.6], [52.55, -8.95]],
+  "Inis Cealtra": [[52.85, -9.0], [52.95, -8.3], [52.72, -8.8]],
   "Cluain Mhic Nóis": [[53.35, -8.4], [53.3, -9.2]],
   "Maigh Eo": [[53.85, -9.3]],
 };
@@ -127,7 +127,9 @@ const LAGOS = [
 
 // Ilhas sem âncora vão para o território mais próximo — exceto estas regras.
 function donoDaIlha(lat, lon) {
-  if (lat > 56.7 && lon < -6.1) return "Ljóðhús";        // Hébridas Exteriores
+  if (lat > 56.7 && lon < -6.9) return "Ljóðhús";        // Hébridas Exteriores (Uist, Barra...)
+  // Skye, Rùm e Eigg (Hébridas Interiores) ficam com a terra firme mais
+  // próxima: Skye -> Apor Crosán; Rùm e Eigg -> Gleann Comhann.
   if (lat > 58.65 && lon > -3.6) return "Kirkjuvágr";     // Órcades
   return null;
 }
@@ -362,12 +364,24 @@ for (let y = 0; y + 1 < H; y++) for (let x = 0; x < W; x++) {
 }
 const faltando = [], sobrando = [];
 NOMES.forEach((t, a) => VIZ_TERRA[a].forEach(b => { if (a < b && !encostam.has(a + "|" + b)) faltando.push(t + " — " + NOMES[b]); }));
-encostam.forEach(k => { const [a, b] = k.split("|").map(Number); if (!VIZ_TERRA[a].has(b)) sobrando.push(NOMES[a] + " — " + NOMES[b]); });
+// (par ligado por rota marítima pode encostar: já são vizinhos no jogo)
+encostam.forEach(k => { const [a, b] = k.split("|").map(Number); if (!TERRITORIOS[NOMES[a]].vizinhos.includes(NOMES[b])) sobrando.push(NOMES[a] + " — " + NOMES[b]); });
 const area = new Array(NOMES.length).fill(0);
 for (let c = 0; c < N; c++) if (dono[c] >= 0) area[dono[c]]++;
 console.log("escala:", ESC.toFixed(1), "px/grau · pixels de lago:", lagos);
 console.log("fronteiras que FALTAM:", faltando.length ? faltando : "nenhuma");
 console.log("fronteiras que SOBRAM:", sobrando.length ? sobrando : "nenhuma");
+// divisas curtas demais (vizinhos que quase não parecem vizinhos no desenho)
+const comprimento = new Map();
+for (let y = 0; y + 1 < H; y++) for (let x = 0; x + 1 < W; x++) {
+  const a = dono[y * W + x]; if (a < 0) continue;
+  for (const b of [dono[y * W + x + 1], dono[(y + 1) * W + x]]) if (b >= 0 && b !== a) {
+    const k = Math.min(a, b) + "|" + Math.max(a, b); comprimento.set(k, (comprimento.get(k) || 0) + 1);
+  }
+}
+const curtas = [];
+comprimento.forEach((n, k) => { const [a, b] = k.split("|").map(Number); if (n < 10) curtas.push(NOMES[a] + " — " + NOMES[b] + " (" + n + " px)"); });
+console.log("divisas CURTAS (< 10 px):", curtas.length ? curtas : "nenhuma");
 NOMES.forEach((t, i) => { if (area[i] < 900) console.log("  território pequeno:", t, area[i], "px"); });
 
 // ============================================================
