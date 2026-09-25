@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (app no celular).
+Última atualização: 25/09/2026 (app aprovado; próximo: online).
 
 ---
 
@@ -179,7 +179,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 
 ## 8. Próximos passos (ordem combinada)
 
-1. **Playtest do app no celular** (instalar, jogar deitado, sem internet) — e ajustes que saírem dele.
+1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
 2. **Online (multiplayer)** — Firebase Realtime Database autoritativo ("Opção A"): a partida vive na nuvem, sobrevive à queda de qualquer jogador, quem cai é substituído por bot. Novo `rede.js`, reaproveitando `kfgc-web/super-trunfo-egipcio-online-multiplayer` (login anônimo, salas com código de 5 letras), refatorado para nuvem-autoritativo e até 9 assentos (Grande Exército). Firebase novo, plano Spark gratuito, sem Cloud Functions. Link de convite. Kauã precisa criar o projeto no Firebase (Claude guia).
+   - **Antes de começar (no chat novo):** o repositório do Super Trunfo não vem junto — pedir acesso a `kfgc-web/super-trunfo-egipcio-online-multiplayer` (ferramenta de adicionar repositório) para reaproveitar login anônimo e salas. Guiar Kauã a criar o projeto Firebase (Realtime Database + login anônimo) e colar a configuração; regras de segurança do banco fazem parte da entrega.
+   - **O que já ajuda:** o `estado` do motor é dado simples (JSON), pronto para ir para a nuvem; `jogarTurnoBot` assume o turno em qualquer fase (bot no lugar de quem caiu); a ordem dos assentos é a ordem de jogada.
+   - **O que vai mudar na tela:** hoje `telas.js` supõe **um humano** (`HUMANO`) e roda os bots localmente (`rodarBots`). No online: cada aparelho sabe o seu assento; só um aparelho (ou regra combinada) roda os bots para não jogarem em dobro; ações viram escritas no estado da nuvem e a tela redesenha quando o estado muda. Pensar em quem rola os dados (evitar trapaça) e em partidas longas (Grande Exército com 9).
+   - Tela nova de **sala**: criar/entrar com código de 5 letras, link de convite, escolher modo/lado/assento e cor, completar com bots, começar.
    - Junto com o online: **escolha de cor** de cada jogador na sala (decidido deixar para lá; hoje a cor é do assento — a Rixa de Sangue terá de olhar a cor, não o assento). No Grande Exército as cores seguem fixas por reino.
 3. Ideia anotada: **salvar a partida** no aparelho (hoje fechar o app ou atualizar a versão recomeça a partida).
