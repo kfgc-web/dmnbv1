@@ -279,7 +279,10 @@ function objetivoCumprido(estado, idJogador) {
   return false;
 }
 
-// Texto do objetivo para mostrar na tela: { nome, texto, reserva }.
+// Texto do objetivo para mostrar na tela:
+//   { nome, texto, original, reserva, motivo }
+//   nome/texto = o objetivo que VALE agora; original = o sorteado;
+//   reserva = true se a Rixa de Sangue virou "Bretwalda"; motivo = por quê.
 function descreverObjetivo(estado, idJogador) {
   const obj = estado.jogadores[idJogador].objetivo;
   if (!obj) return null;
@@ -295,12 +298,23 @@ function descreverObjetivo(estado, idJogador) {
     return "";
   };
   const reserva = ef !== obj;
+  let motivo = "";
+  if (reserva) {
+    const alvo = estado.jogadores[obj.alvo];
+    const cor = "o jogador " + NOMES_COR[obj.alvo];
+    if (!alvo) motivo = cor + " não está nesta partida";
+    else if (obj.alvo === idJogador) motivo = cor + " é você mesmo";
+    else {
+      const quem = alvo.eliminadoPor != null ? estado.jogadores[alvo.eliminadoPor].nome : "outro jogador";
+      motivo = cor + " (" + alvo.nome + ") foi eliminado por " + quem;
+    }
+  }
   return {
     nome: reserva ? "Bretwalda" : obj.nome,
-    texto: reserva ? "Conquistar " + OBJETIVO_RESERVA.qtd + " territórios. (Sua Rixa de Sangue não vale mais: " +
-      "o alvo não está na partida, é você, ou foi eliminado por outro.)" : texto(obj),
+    texto: reserva ? texto(OBJETIVO_RESERVA) : texto(obj),
     original: obj.nome + ": " + texto(obj),
     reserva: reserva,
+    motivo: motivo,
   };
 }
 

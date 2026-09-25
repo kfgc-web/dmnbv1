@@ -314,7 +314,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (d) {
       html += objetivoOculto
         ? '<p class="objTexto oculto">Seu objetivo está escondido.</p>'
-        : '<p class="objNome">' + d.nome + '</p><p class="objTexto">' + d.texto + "</p>";
+        : '<p class="objNome">' + d.nome + '</p><p class="objTexto">' + d.texto +
+          (d.reserva ? ' <i class="objMotivo">Sua Rixa de Sangue virou Bretwalda porque ' + d.motivo + ".</i>" : "") + "</p>";
     } else {
       html += '<p class="objTexto">' + MODOS[estado.modo].resumo + "</p>";
     }
@@ -756,7 +757,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (ultimo) motivo = v.nome + " é o último de pé: todos os outros reinos caíram.";
     else if (estado.modo === "classico") {
       const d = descreverObjetivo(estado, estado.vencedor);
-      motivo = v.nome + " cumpriu o objetivo <b>" + d.nome + "</b>: " + d.texto.split(" (")[0];
+      motivo = d.reserva
+        ? v.nome + " cumpriu o objetivo reserva <b>Bretwalda</b> (" + d.texto.replace(/\.$/, "").toLowerCase() +
+          "). O objetivo sorteado era a <b>Rixa de Sangue</b>, mas deixou de valer porque " + d.motivo + "."
+        : v.nome + " cumpriu o objetivo <b>" + d.nome + "</b>: " + d.texto;
     } else {
       motivo = v.nome + " domina " + regs.length + " regiões inteiras.";
       extra = '<div id="winRegions">' + Object.keys(REGIOES).map(function (r) {
@@ -769,7 +773,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       extra = '<div class="objRevelados">' + estado.jogadores.map(function (j) {
         const d = descreverObjetivo(estado, j.id);
         return '<div class="objRev"><span class="dot" style="background:' + j.cor + '"></span><span><b>' + j.nome + "</b> · " +
-          d.original + (d.reserva ? " <i>(virou Bretwalda)</i>" : "") + "</span></div>";
+          d.original + (d.reserva ? " <i>Virou Bretwalda (36 territórios) porque " + d.motivo + ".</i>" : "") + "</span></div>";
       }).join("") + "</div>";
     }
     ov.innerHTML =
