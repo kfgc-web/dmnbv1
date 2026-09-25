@@ -107,6 +107,7 @@ Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" 
 - **Dados** aparecem em cima da batalha e somem em 1,5 s.
 - **Zoom** pelos botões + / − (mantém o centro).
 - **Botão "Painel"** no cabeçalho recolhe o painel (fica só a vez, a fase e os botões) — pensado para o celular; a escolha fica guardada no navegador.
+- **Celular (retrato):** painel aberto ocupa **metade da tela** e rola como **uma página só** (sem rolagens separadas por seção); o mapa fica na outra metade.
 - Painel mostra o **modo** e, no Clássico, o **objetivo** do jogador.
 - Bots jogam com pausa (~780 ms); territórios que trocam de dono piscam.
 - Cores dos assentos: `#c0392b`, `#2c6fbb`, `#27ae60`, `#e0a200`, `#8e44ad`, `#16a085`. Acento pergaminho/osso `#cbb892`; títulos em **Cinzel**.
