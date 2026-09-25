@@ -30,6 +30,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   let animando = false;         // true enquanto bots jogam (trava cliques)
   let escolhendoConquista = false; // true entre a conquista e a janela de "quantos entram"
   let zoom = 1;
+  let online = false;           // partida online (online.js): a nuvem guarda as jogadas e roda os bots
+  let partidaN = 0;             // muda a cada partida nova (bots de uma partida velha param)
 
   // refs de elementos SVG por território
   const elDisc = {}, elArmy = {}, elRing = {}, elEquipe = {};
@@ -70,6 +72,15 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function nomeDe(id) {
     const j = estado.jogadores[id];
     return j.reino && j.reino !== j.nome ? j.nome + " · " + j.reino : j.nome;
+  }
+
+  // Uma jogada minha: vale na hora aqui e, no online, vai para a nuvem.
+  // (ações descritas como dado: veja aplicarAcao em motor.js)
+  function jogar(acao) {
+    acao.a = HUMANO;
+    const r = aplicarAcao(estado, acao);
+    if (r.ok && online) window.ONLINE.enviar(acao);
+    return r;
   }
 
   // texto preto ou branco conforme a cor de fundo
@@ -218,7 +229,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // -------- render (atualiza cores, números, destaques, painel) --------
   function render() {
     if (!estado) return;
-    const minhaVez = (estado.vez === HUMANO && !animando && estado.vencedor === null);
+    const minhaVez = ehMinhaVez();
     // nós
     Object.keys(TERRITORIOS).forEach(function (t) {
       const cor = corDe(t);
@@ -256,10 +267,16 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     renderPainel();
   }
 
+  function ehMinhaVez() { return estado.vez === HUMANO && !animando && estado.vencedor === null; }
+
   function renderPainel() {
     const j = estado.jogadores[estado.vez];
     document.getElementById("turnDot").style.background = j.cor;
-    document.getElementById("turnWho").textContent = animando ? (nomeDe(j.id) + " está jogando…") : nomeDe(j.id);
+    document.getElementById("turnWho").textContent = animando || (online && j.id !== HUMANO && estado.vencedor === null)
+      ? (nomeDe(j.id) + " está jogando…") : nomeDe(j.id);
+    const onBox = document.getElementById("onlineBox");
+    onBox.innerHTML = online ? window.ONLINE.painelHtml() : "";
+    if (online) window.ONLINE.ligarPainel(onBox);
 
     const fases = { reforco: "Reforço", ataque: "Ataque", remanejamento: "Remanejamento", fim: "Fim de jogo" };
     document.getElementById("phaseTag").textContent = (estado.vencedor !== null ? "Fim de jogo" : fases[estado.fase]) +
@@ -267,7 +284,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
 
     const reinf = document.getElementById("reinf");
     const instr = document.getElementById("instr");
-    const minhaVez = (estado.vez === HUMANO && !animando && estado.vencedor === null);
+    const minhaVez = ehMinhaVez();
 
     reinf.innerHTML = "";
     if (minhaVez && estado.fase === "reforco") {
@@ -283,7 +300,9 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (estado.vencedor !== null) {
       instr.textContent = "";
     } else if (!minhaVez) {
-      instr.textContent = "Aguarde — os outros comandantes estão movendo seus exércitos.";
+      instr.textContent = online && !window.ONLINE.estaOnline(estado.vez)
+        ? nomeDe(estado.vez) + " está desconectado: o bot joga por ele em instantes."
+        : "Aguarde — os outros comandantes estão movendo seus exércitos.";
     } else if (estado.fase === "reforco") {
       const ativo = reforcoAtivo();
       if (ativo && ativo.modo === "regiao")
@@ -362,10 +381,12 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- conquista: quantos exércitos entram --------
-  function abrirConquista(r, origem, destino) {
+  function abrirConquista() {
     const ov = document.getElementById("overlay");
-    if (!estado.conquista) { escolhendoConquista = false; render(); return; }
-    const max = r.podeFicarAte; // 2 ou 3 (com 1 só não há escolha)
+    if (!estado.conquista || !ehMinhaVez()) { escolhendoConquista = false; render(); return; }
+    escolhendoConquista = true;
+    const origem = estado.conquista.origem, destino = estado.conquista.destino;
+    const max = Math.min(MAX_MOVER_CONQUISTA, estado.territorios[destino].exercitos + estado.territorios[origem].exercitos - 1); // 2 ou 3
     let botoes = "";
     for (let n = 1; n <= max; n++) botoes += '<button class="conqOpcao" data-n="' + n + '">' + n + "</button>";
     ov.innerHTML =
@@ -378,7 +399,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     ov.classList.add("on");
     ov.querySelectorAll(".conqOpcao").forEach(function (b) {
       b.addEventListener("click", function () {
-        const m = moverNaConquista(estado, Number(b.dataset.n));
+        const m = jogar({ t: "conq", n: Number(b.dataset.n) });
         if (!m.ok) return toast(m.erro);
         ov.classList.remove("on");
         escolhendoConquista = false;
@@ -417,8 +438,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function abrirCartas(obrigatoria) {
     const ov = document.getElementById("overlay");
     const mao = estado.jogadores[HUMANO].cartas || [];
-    const minhaVez = estado.vez === HUMANO && !animando && estado.vencedor === null;
-    const podeTrocar = minhaVez && estado.fase === "reforco";
+    const podeTrocar = ehMinhaVez() && estado.fase === "reforco";
     const escolhidas = [];
     ov.innerHTML =
       '<div class="modal modalCartas">' +
@@ -478,7 +498,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         atualizar();
       });
       ov.querySelector("#trocaOk").addEventListener("click", function () {
-        const r = trocarCartas(estado, escolhidas.slice());
+        const r = jogar({ t: "troca", c: escolhidas.slice() });
         if (!r.ok) return toast(r.erro);
         toast("+" + r.valor + " exércitos no reforço geral" + (r.bonusEm.length ? " · +2 em " + r.bonusEm.join(", ") : ""));
         ov.classList.remove("on");
@@ -514,9 +534,11 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     box.innerHTML = "";
     resumoJogadores(estado).forEach(function (r) {
       const row = document.createElement("div");
-      row.className = "prow" + (r.id === estado.vez && estado.vencedor === null ? " turn" : "") + (r.vivo ? "" : " dead");
+      const fora = online && !window.ONLINE.estaOnline(r.id);
+      row.className = "prow" + (r.id === estado.vez && estado.vencedor === null ? " turn" : "") + (r.vivo ? "" : " dead") + (fora ? " off" : "");
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.cor;
-      const name = document.createElement("span"); name.className = "pname"; name.textContent = nomeDe(r.id);
+      const name = document.createElement("span"); name.className = "pname";
+      name.textContent = nomeDe(r.id) + (online && r.id === HUMANO ? " (você)" : "") + (fora ? " · desconectado" : "");
       const stat = document.createElement("span"); stat.className = "stat";
       stat.textContent = r.territorios + "⬡ · " + r.exercitos + "⚔ · " + r.cartas + "▯";
       row.appendChild(dot);
@@ -554,7 +576,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // -------- cliques no território --------
   function onClick(t) {
     if (animando || escolhendoConquista || estado.vencedor !== null) return;
-    if (estado.jogadores[estado.vez].tipo !== "humano") return;
+    if (estado.vez !== HUMANO) return;
     if (estado.fase === "reforco") cliqueReforco(t);
     else if (estado.fase === "ataque") cliqueAtaque(t);
     else if (estado.fase === "remanejamento") cliqueRemanejo(t);
@@ -569,7 +591,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (ativo.modo === "mar" && !TERRITORIOS[t].litoral)
       return toast("O reforço do mar só entra em território no litoral.");
     if (trocaObrigatoria(estado)) return abrirCartas(true);
-    const r = posicionarReforco(estado, t, 1);
+    const r = jogar({ t: "ref", x: t });
     if (!r.ok) return toast(r.erro);
     render();
     if (estado.reforcosPendentes === 0) autoAvancarReforco();
@@ -579,9 +601,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // (~0,3s) para o jogador ver o último soldado cair e então abre o ataque.
   function autoAvancarReforco() {
     render();
-    setTimeout(function () {
-      if (estado.fase !== "reforco" || estado.reforcosPendentes !== 0) return;
-      const r = terminarReforco(estado);
+    clearTimeout(autoAvancarReforco._t);
+    autoAvancarReforco._t = setTimeout(function () {
+      if (!ehMinhaVez() || estado.fase !== "reforco" || estado.reforcosPendentes !== 0 || trocaObrigatoria(estado)) return;
+      const r = jogar({ t: "fimRef" });
       if (r.ok) { selecao = null; render(); }
     }, 300);
   }
@@ -606,15 +629,16 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   function executarAtaque(origem, destino) {
-    const r = atacar(estado, origem, destino, { escolher: true });
+    const r = jogar({ t: "atq", o: origem, d: destino });
     if (!r.ok) return toast(r.erro);
     mostrarDados(r, origem, destino);
     if (estado.vencedor !== null) { render(); agendarVitoria(900); return; }
     if (estado.conquista) {
       // conquistou e sobrou tropa na origem: o jogador escolhe quantos entram
-      selecao = null; render();
+      selecao = null;
       escolhendoConquista = true;
-      setTimeout(function () { abrirConquista(r, origem, destino); }, 700);
+      render();
+      setTimeout(abrirConquista, 700);
       return;
     }
     // mantém atacando da origem, se ainda der
@@ -642,10 +666,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- botões de ação --------
-  function acaoTerminarAtaque() { const r = terminarAtaque(estado); if (!r.ok) return toast(r.erro); selecao = null; render(); }
+  function acaoTerminarAtaque() { const r = jogar({ t: "fimAtq" }); if (!r.ok) return toast(r.erro); selecao = null; render(); }
   function acaoPassar() {
     selecao = null; destinoSel = null;
-    const r = passarVez(estado); if (!r.ok) return toast(r.erro);
+    const r = jogar({ t: "passar" }); if (!r.ok) return toast(r.erro);
     if (r.carta) toast("Você ganhou uma carta: " + (r.carta.t ? r.carta.t + " (" + NOME_SIMBOLO[r.carta.s] + ")" : "Coringa"));
     depoisDoTurno();
   }
@@ -657,7 +681,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     render();
   }
   function moverConfirmar() {
-    const r = remanejar(estado, selecao, destinoSel, qtdMover);
+    const r = jogar({ t: "rem", o: selecao, d: destinoSel, n: qtdMover });
     if (!r.ok) return toast(r.erro);
     // Não encerra a fase: o jogador pode continuar remanejando (vários pulos).
     selecao = null; destinoSel = null; render();
@@ -668,7 +692,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function depoisDoTurno() {
     render();
     if (estado.vencedor !== null) { agendarVitoria(700); return; }
-    if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
+    if (!online && estado.jogadores[estado.vez].tipo === "bot") rodarBots();
   }
 
   function snapshot() { const m = {}; Object.keys(estado.territorios).forEach(function (t) { m[t] = estado.territorios[t].dono; }); return m; }
@@ -688,7 +712,9 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
 
   function rodarBots() {
     animando = true; selecao = null; destinoSel = null; render();
+    const minhaPartida = partidaN;
     function passo() {
+      if (minhaPartida !== partidaN) return; // começou outra partida
       if (estado.vencedor !== null) { animando = false; render(); agendarVitoria(400); return; }
       if (estado.jogadores[estado.vez].tipo === "bot") {
         const antes = snapshot();
@@ -707,6 +733,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // -------- dados (octógonos d8) --------
   function mostrarDados(r, origem, destino) {
     const box = document.getElementById("dice");
+    const meu = estado.vez === HUMANO;
     const corA = estado.jogadores[estado.vez].cor;
     const corD = "#8a95a1";
     let html = '<div class="dside"><span class="cap">Ataque</span><div class="dice-row">';
@@ -718,8 +745,9 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       html += '<span class="die" style="background:' + corD + ';color:#15110a">' + v + "</span>";
     });
     html += "</div></div>";
-    let res = "Você perdeu " + r.perdasAtacante + " · inimigo perdeu " + r.perdasDefensor;
-    if (r.conquistou) res = '<span class="win">Conquistou ' + destino + "!</span>";
+    let res = meu ? "Você perdeu " + r.perdasAtacante + " · inimigo perdeu " + r.perdasDefensor
+      : "Ataque perdeu " + r.perdasAtacante + " · defesa perdeu " + r.perdasDefensor;
+    if (r.conquistou) res = '<span class="win">' + (meu ? "Conquistou " : nomeDe(estado.vez) + " conquistou ") + destino + "!</span>";
     if (r.pontos) res += " · +" + r.pontos + " ponto" + (r.pontos > 1 ? "s" : "");
     html += '<div class="dres">' + res + "</div>";
     box.innerHTML = html;
@@ -786,6 +814,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
           "Conquistou no turno? Ganha <b>1 carta</b>. Troque 3 iguais ou 3 diferentes por exércitos: <b>4, 6, 8, 10, 12, 15, 18, 20</b>, depois +5." +
         "</div>" +
         '<button class="primary" id="startBtn" style="width:100%">Começar</button>' +
+        '<div class="inicioOnline" id="inicioOnline"></div>' +
       "</div>";
     ov.classList.add("on");
     const q = ov.querySelector("#advQty");
@@ -826,6 +855,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     ov.querySelector("#startBtn").addEventListener("click", function () {
       novoJogo(adv, modo, { tamanhoEquipe: tamEquipe, lado: lado });
     });
+    if (window.ONLINE) window.ONLINE.preencherInicio(ov.querySelector("#inicioOnline"));
     atualizar();
   }
 
@@ -935,12 +965,16 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         '<button class="primary" id="againBtn" style="width:100%">Jogar de novo</button>' +
       "</div>";
     ov.classList.add("on");
-    ov.querySelector("#againBtn").addEventListener("click", mostrarInicio);
+    ov.querySelector("#againBtn").addEventListener("click", function () {
+      if (online) window.ONLINE.sair();
+      mostrarInicio();
+    });
   }
 
   // nBots = adversários; opcoes = { tamanhoEquipe, lado } (Equipes / Grande Exército)
   function novoJogo(nBots, modo, opcoes) {
     opcoes = opcoes || {};
+    if (online) window.ONLINE.sair({ manterSala: estado && estado.vencedor === null });
     let jogadores = [{ nome: "Você", tipo: "humano" }];
     for (let i = 1; i <= nBots; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
     if (modo === "grande") {
@@ -949,6 +983,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       });
     }
     estado = criarPartida(jogadores, { modo: modo, tamanhoEquipe: opcoes.tamanhoEquipe });
+    partidaN++;
     HUMANO = Math.max(0, estado.jogadores.findIndex(function (j) { return j.tipo === "humano"; }));
     selecao = null; destinoSel = null; animando = false; escolhendoConquista = false;
     vitoriaAgendada = false; objetivoOculto = false;
@@ -956,6 +991,59 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     render();
     if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
   }
+
+  /* -------- partida online (online.js cuida da nuvem) -------- */
+  // Começa (ou retoma) a partida online: o estado já vem refeito pela lista de jogadas.
+  function abrirPartidaOnline(novo, meuId) {
+    online = true;
+    partidaN++;
+    HUMANO = meuId;
+    animando = false;
+    vitoriaAgendada = false; objetivoOculto = false;
+    reconstruir(novo);
+  }
+
+  // Troca o estado inteiro (entrada na partida, ou a partida foi refeita pela lista).
+  function reconstruir(novo) {
+    estado = novo;
+    selecao = null; destinoSel = null; escolhendoConquista = false;
+    const ov = document.getElementById("overlay");
+    if (!ov.querySelector(".modalVitoria, .modalSaida")) ov.classList.remove("on");
+    render();
+    retomarMinhaVez();
+  }
+
+  // Na minha vez, abre o que estiver pendente (troca obrigatória, conquista, fim do reforço).
+  function retomarMinhaVez() {
+    if (!ehMinhaVez() || document.querySelector("#overlay.on .modalSaida")) return; // não atropela "Sair da partida?"
+    if (estado.fase === "reforco") {
+      if (trocaObrigatoria(estado)) abrirCartas(true);
+      else if (estado.reforcosPendentes === 0) autoAvancarReforco();
+    } else if (estado.fase === "ataque" && estado.conquista) abrirConquista();
+  }
+
+  // Jogada de outro aparelho (ou do bot) que chegou da nuvem.
+  function receber(acao) {
+    const antes = snapshot();
+    const eraMinha = estado.vez === HUMANO;
+    const r = aplicarAcao(estado, acao);
+    if (!r.ok) return r;
+    if (eraMinha) { // o bot jogou por mim (caí ou fiquei parado)
+      selecao = null; destinoSel = null; escolhendoConquista = false;
+      const ov = document.getElementById("overlay");
+      if (!ov.querySelector(".modalVitoria, .modalSaida")) ov.classList.remove("on");
+    }
+    if (acao.t === "atq") mostrarDados(r, acao.o, acao.d);
+    if (acao.t === "bot" && estado.jogadores[acao.a].tipo === "humano")
+      toast(acao.a === HUMANO ? "Você ficou sem jogar e o bot fez este turno por você." : "O bot jogou por " + estado.jogadores[acao.a].nome + ".");
+    flash(antes);
+    render();
+    if (estado.vencedor !== null) agendarVitoria(900);
+    else if (!eraMinha) retomarMinhaVez();
+    return r;
+  }
+
+  function fimOnline() { online = false; }
 
   // -------- toast --------
   function toast(msg) {
@@ -999,7 +1087,12 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     document.getElementById("painelBtn").addEventListener("click", function () {
       aplicarPainel(!document.getElementById("app").classList.contains("painelRecolhido"));
     });
-    document.getElementById("newGame").addEventListener("click", mostrarInicio);
+    document.getElementById("newGame").addEventListener("click", function () {
+      if (online && estado && estado.vencedor === null) return confirmarSaida();
+      mostrarInicio();
+    });
+    // no online, qualquer toque na minha vez conta como "estou aqui"
+    document.addEventListener("pointerdown", function () { if (online) window.ONLINE.sinal(); }, true);
     document.getElementById("zoomIn").addEventListener("click", function () { zoom = Math.min(4, zoom + 0.25); aplicarZoom(); });
     document.getElementById("zoomOut").addEventListener("click", function () { zoom = Math.max(1, zoom - 0.25); aplicarZoom(); });
     document.getElementById("moverMinus").addEventListener("click", function () { moverAjuste(-1); });
@@ -1010,12 +1103,42 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     window.addEventListener("resize", function () { clearTimeout(aplicarZoom._t); aplicarZoom._t = setTimeout(aplicarZoom, 120); });
   }
 
+  // Sair da partida online no meio: o bot joga por você enquanto estiver fora.
+  function confirmarSaida() {
+    const ov = document.getElementById("overlay");
+    ov.innerHTML =
+      '<div class="modal modalSaida">' +
+        "<h2>Sair da partida?</h2>" +
+        '<p class="lead">A partida online continua sem você: o bot joga no seu lugar. Dá para voltar depois pela tela de início ou pelo convite.</p>' +
+        '<div class="trocaAcoes"><button class="primary" id="saidaFicar">Continuar jogando</button><button class="ghost" id="saidaSair">Sair</button></div>' +
+      "</div>";
+    ov.classList.add("on");
+    ov.querySelector("#saidaFicar").addEventListener("click", function () { ov.classList.remove("on"); retomarMinhaVez(); });
+    ov.querySelector("#saidaSair").addEventListener("click", function () {
+      window.ONLINE.sair({ manterSala: true }); // a tela de início oferece voltar
+      mostrarInicio();
+    });
+  }
+
   // Há partida em andamento? (app.js usa para avisar que atualizar recomeça a partida)
-  window.partidaEmAndamento = function () { return !!estado && estado.vencedor === null; };
+  window.partidaEmAndamento = function () { return !!estado && estado.vencedor === null && !online; };
+
+  // O que o online.js usa da tela.
+  window.TELAS = {
+    estado: function () { return estado; },
+    render: function () { render(); },
+    toast: toast,
+    mostrarInicio: mostrarInicio,
+    abrirPartidaOnline: abrirPartidaOnline,
+    reconstruir: reconstruir,
+    receber: receber,
+    fimOnline: fimOnline,
+  };
 
   // -------- start --------
   instalarDefsCartas();
   construir();
   ligarUI();
   mostrarInicio();
+  if (window.ONLINE) window.ONLINE.aoAbrir();
 })();

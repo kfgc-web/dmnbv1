@@ -1,0 +1,66 @@
+{
+  "rules": {
+    "salas": {
+      ".read": "auth != null",
+      ".indexOn": ["criadaEm"],
+      "$sala": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.child('meta/host').val() === auth.uid) || (!newData.exists() && (data.child('meta/host').val() === auth.uid && data.child('meta/status').val() === 'lobby' || data.child('criadaEm').val() < now - 259200000)))",
+        ".validate": "newData.hasChildren(['criadaEm', 'meta'])",
+        "criadaEm": {
+          ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() : newData.val() <= now)"
+        },
+        "meta": {
+          ".write": "auth != null && data.child('host').val() === auth.uid",
+          ".validate": "newData.hasChildren(['host', 'status', 'modo'])",
+          "host": { ".validate": "newData.isString() && root.child('salas/' + $sala + '/membros/' + newData.val()).exists() || newData.val() === auth.uid" },
+          "status": { ".validate": "newData.val() === 'lobby' || newData.val() === 'jogando' && newData.parent().parent().child('partida/config').exists()" },
+          "modo": { ".validate": "newData.val().matches(/^(classico|dominio|total|rapida|grande|equipes)$/)" },
+          "tamEquipe": { ".validate": "newData.val() === 2 || newData.val() === 3" },
+          "$outro": { ".validate": false }
+        },
+        "membros": {
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "assentos": {
+          ".write": "auth != null && root.child('salas/' + $sala + '/membros/' + auth.uid).exists() && root.child('salas/' + $sala + '/meta/status').val() === 'lobby'",
+          "$i": {
+            ".validate": "$i.matches(/^[0-8]$/) && newData.hasChild('tipo')",
+            "tipo": { ".validate": "newData.val().matches(/^(humano|aberto|bot|vazio)$/)" },
+            "uid": { ".validate": "newData.isString() && (newData.val() === auth.uid || root.child('salas/' + $sala + '/membros/' + newData.val()).exists())" },
+            "nome": { ".validate": "newData.isString() && newData.val().matches(/^[^<>&\"']{1,16}$/)" },
+            "cor": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5" },
+            "equipe": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" },
+            "online": {
+              ".write": "auth != null && data.parent().child('uid').val() === auth.uid",
+              ".validate": "newData.isBoolean()"
+            },
+            "$outro": { ".validate": false }
+          }
+        },
+        "partida": {
+          "config": {
+            ".write": "auth != null && !data.exists() && root.child('salas/' + $sala + '/meta/host').val() === auth.uid",
+            ".validate": "newData.hasChildren(['modo', 'semente', 'jogadores'])"
+          }
+        },
+        "acoes": {
+          "$n": {
+            ".write": "auth != null && !data.exists() && root.child('salas/' + $sala + '/meta/status').val() === 'jogando' && (newData.child('t').val() === 'bot' ? root.child('salas/' + $sala + '/membros/' + auth.uid).exists() : root.child('salas/' + $sala + '/partida/config/jogadores/' + newData.child('a').val() + '/uid').val() === auth.uid)",
+            ".validate": "$n.matches(/^[0-9]{7}$/) && newData.hasChildren(['t', 'a']) && newData.child('t').isString() && newData.child('a').isNumber()"
+          }
+        },
+        "atividade": {
+          "$id": {
+            ".write": "auth != null && root.child('salas/' + $sala + '/partida/config/jogadores/' + $id + '/uid').val() === auth.uid",
+            ".validate": "newData.isNumber() && newData.val() <= now"
+          }
+        },
+        "$outro": { ".validate": false }
+      }
+    }
+  }
+}
