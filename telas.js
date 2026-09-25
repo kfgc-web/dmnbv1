@@ -274,6 +274,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     }
 
     renderAcoes(minhaVez);
+    renderCartas(minhaVez);
     renderMover(minhaVez);
     renderPlayers();
     renderLog();
@@ -299,6 +300,113 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     }
   }
 
+  // -------- cartas (painel + janela de troca) --------
+  function renderCartas(minhaVez) {
+    const box = document.getElementById("cartasBox");
+    const mao = estado.jogadores[HUMANO].cartas || [];
+    const podeTrocar = minhaVez && estado.fase === "reforco" && acharTroca(estado, HUMANO) !== null;
+    let html = '<div class="cartashead"><h3>Suas cartas</h3><span class="cartasinfo">Próxima troca: <b>+' +
+      valorDaTroca(estado.trocasFeitas) + "</b></span></div>";
+    if (!mao.length) html += '<p class="cartasvazio">Conquiste pelo menos 1 território no turno para ganhar uma carta.</p>';
+    else {
+      html += '<div class="maoChips">';
+      mao.forEach(function (c) {
+        html += '<span class="chipCarta">' + iconeSimbolo(c.s, 18) + "<span>" + (c.t || "Coringa") + "</span></span>";
+      });
+      html += "</div>";
+    }
+    box.innerHTML = html;
+    if (mao.length) {
+      const b = botao(podeTrocar ? "Trocar cartas" : "Ver cartas", podeTrocar ? "primary" : "", function () { abrirCartas(false); });
+      b.id = "cartasBtn";
+      box.appendChild(b);
+    }
+  }
+
+  // Janela das cartas. "obrigatoria" = está com 5+ e precisa trocar agora.
+  function abrirCartas(obrigatoria) {
+    const ov = document.getElementById("overlay");
+    const mao = estado.jogadores[HUMANO].cartas || [];
+    const minhaVez = estado.vez === HUMANO && !animando && estado.vencedor === null;
+    const podeTrocar = minhaVez && estado.fase === "reforco";
+    const escolhidas = [];
+    ov.innerHTML =
+      '<div class="modal modalCartas">' +
+        "<h2>" + (obrigatoria ? "Troca obrigatória" : "Suas cartas") + "</h2>" +
+        '<p class="lead">' + (obrigatoria
+          ? "Você está com " + mao.length + " cartas. Troque 3 antes de posicionar os reforços."
+          : "Troque 3 símbolos iguais ou 3 diferentes (o coringa vale qualquer um). A próxima troca da mesa vale <b>+" +
+            valorDaTroca(estado.trocasFeitas) + "</b>, e cada carta de território seu põe +2 nele.") + "</p>" +
+        '<div class="mesaCartas" id="mesaCartas"></div>' +
+        '<p class="trocaStatus" id="trocaStatus"></p>' +
+        '<div class="trocaAcoes">' +
+          (podeTrocar ? '<button class="ghost" id="trocaMelhor">Escolher a melhor</button><button class="primary" id="trocaOk" disabled>Trocar</button>' : "") +
+          (obrigatoria ? "" : '<button class="ghost" id="trocaFechar">Fechar</button>') +
+        "</div>" +
+      "</div>";
+    ov.classList.add("on");
+    const mesa = ov.querySelector("#mesaCartas");
+    mao.forEach(function (c, i) {
+      const b = document.createElement("button");
+      b.className = "cartaBtn";
+      b.innerHTML = desenharCarta(c);
+      b.setAttribute("aria-pressed", "false");
+      if (podeTrocar) b.addEventListener("click", function () {
+        const k = escolhidas.indexOf(i);
+        if (k >= 0) escolhidas.splice(k, 1);
+        else if (escolhidas.length < 3) escolhidas.push(i);
+        atualizar();
+      });
+      else b.disabled = true;
+      mesa.appendChild(b);
+    });
+    function atualizar() {
+      mesa.querySelectorAll(".cartaBtn").forEach(function (b, i) {
+        const on = escolhidas.indexOf(i) >= 0;
+        b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      const st = ov.querySelector("#trocaStatus"), ok = ov.querySelector("#trocaOk");
+      if (!podeTrocar) { st.textContent = "Dá para trocar na fase de reforço do seu turno."; return; }
+      const trio = escolhidas.map(function (i) { return mao[i]; });
+      let valida = false;
+      if (escolhidas.length < 3) st.textContent = "Escolha 3 cartas (" + escolhidas.length + " de 3).";
+      else if (!trocaValida(trio)) st.textContent = "Essas 3 não formam troca: precisa ser 3 iguais ou 3 diferentes.";
+      else {
+        valida = true;
+        const meus = trio.filter(function (c) { return c.t && estado.territorios[c.t].dono === HUMANO; }).map(function (c) { return c.t; });
+        st.innerHTML = "Troca válida: <b>+" + valorDaTroca(estado.trocasFeitas) + "</b> no reforço geral" +
+          (meus.length ? ", e +2 em " + meus.join(", ") : "") + ".";
+      }
+      if (ok) ok.disabled = !valida;
+    }
+    if (podeTrocar) {
+      ov.querySelector("#trocaMelhor").addEventListener("click", function () {
+        const m = acharTroca(estado, HUMANO);
+        escolhidas.length = 0;
+        if (m) m.forEach(function (i) { escolhidas.push(i); });
+        else toast("Nenhuma troca possível com essas cartas.");
+        atualizar();
+      });
+      ov.querySelector("#trocaOk").addEventListener("click", function () {
+        const r = trocarCartas(estado, escolhidas.slice());
+        if (!r.ok) return toast(r.erro);
+        toast("+" + r.valor + " exércitos no reforço geral" + (r.bonusEm.length ? " · +2 em " + r.bonusEm.join(", ") : ""));
+        ov.classList.remove("on");
+        render();
+        if (trocaObrigatoria(estado)) abrirCartas(true);
+      });
+    }
+    const fechar = ov.querySelector("#trocaFechar");
+    if (fechar) fechar.addEventListener("click", function () { ov.classList.remove("on"); });
+    atualizar();
+  }
+
+  // No começo do seu reforço: com 5+ cartas, a janela de troca abre sozinha.
+  function checarTrocaObrigatoria() {
+    if (estado.vez === HUMANO && estado.fase === "reforco" && estado.vencedor === null && trocaObrigatoria(estado))
+      abrirCartas(true);
+  }
+
   function renderMover(minhaVez) {
     const box = document.getElementById("mover");
     if (minhaVez && estado.fase === "remanejamento" && selecao && destinoSel) {
@@ -320,7 +428,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.cor;
       const name = document.createElement("span"); name.className = "pname"; name.textContent = r.nome;
       const stat = document.createElement("span"); stat.className = "stat";
-      stat.textContent = r.territorios + "⬡ · " + r.exercitos + "⚔";
+      stat.textContent = r.territorios + "⬡ · " + r.exercitos + "⚔ · " + r.cartas + "▯";
       row.appendChild(dot); row.appendChild(name);
       if (r.regioes.length) {
         const rg = document.createElement("span"); rg.className = "rg"; rg.textContent = r.regioes.length + "/5";
@@ -355,6 +463,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (!ativo) return; // nada a posicionar (o auto-avanço já cuida da transição)
     if (ativo.modo === "regiao" && regiaoDe(t) !== ativo.regiao)
       return toast("Agora é o bônus de " + ativo.regiao + " — toque num território dessa região.");
+    if (trocaObrigatoria(estado)) return abrirCartas(true);
     const r = posicionarReforco(estado, t, 1);
     if (!r.ok) return toast(r.erro);
     render();
@@ -425,6 +534,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function acaoPassar() {
     selecao = null; destinoSel = null;
     const r = passarVez(estado); if (!r.ok) return toast(r.erro);
+    if (r.carta) toast("Você ganhou uma carta: " + (r.carta.t ? r.carta.t + " (" + NOME_SIMBOLO[r.carta.s] + ")" : "Coringa"));
     depoisDoTurno();
   }
 
@@ -476,6 +586,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         setTimeout(passo, DELAY_BOT);
       } else {
         animando = false; render(); // voltou pra você
+        checarTrocaObrigatoria();
       }
     }
     setTimeout(passo, 480);
@@ -499,9 +610,28 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (r.conquistou) res = '<span class="win">Conquistou ' + destino + "!</span>";
     html += '<div class="dres">' + res + "</div>";
     box.innerHTML = html;
+    box.classList.remove("on"); void box.offsetWidth; // reinicia a animação
     box.classList.add("on");
+    posicionarDados(box, origem, destino);
     clearTimeout(mostrarDados._t);
-    mostrarDados._t = setTimeout(function () { box.classList.remove("on"); }, r.conquistou ? 1900 : 1500);
+    mostrarDados._t = setTimeout(function () { box.classList.remove("on"); }, 1500);
+  }
+
+  // Coloca a caixa dos dados logo acima da batalha (entre atacante e
+  // defensor), sem deixar sair da parte do mapa que está visível na tela.
+  function posicionarDados(box, origem, destino) {
+    const sc = document.getElementById("boardScroll");
+    const rs = sc.getBoundingClientRect();
+    const ra = elDisc[origem].getBoundingClientRect(), rd = elDisc[destino].getBoundingClientRect();
+    const cx = (ra.left + ra.right + rd.left + rd.right) / 4 - rs.left + sc.scrollLeft;
+    const topo = Math.min(ra.top, rd.top) - rs.top + sc.scrollTop - 12;
+    const w = box.offsetWidth, h = box.offsetHeight, m = 8;
+    const x = Math.max(sc.scrollLeft + w / 2 + m, Math.min(sc.scrollLeft + sc.clientWidth - w / 2 - m, cx));
+    let y = topo; // a caixa fica ACIMA deste ponto
+    if (y - h < sc.scrollTop + m) y = Math.max(ra.bottom, rd.bottom) - rs.top + sc.scrollTop + 12 + h; // sem espaço em cima: vai para baixo
+    y = Math.min(y, sc.scrollTop + sc.clientHeight - m);
+    box.style.left = x + "px";
+    box.style.top = y + "px";
   }
 
   // -------- modais --------
@@ -514,7 +644,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         '<div class="rules">' +
           "Vença dominando <b>5 das 8 regiões</b> inteiras (ou sobrando o último de pé).<br>" +
           "Combate em <b>d8</b>: o ataque rola até <b>4</b> dados, a defesa até <b>3</b>; comparam-se os maiores e o <b>empate é da defesa</b>.<br>" +
-          "Só ataca quem tem <b>2+</b> exércitos." +
+          "Só ataca quem tem <b>2+</b> exércitos.<br>" +
+          "Conquistou no turno? Ganha <b>1 carta</b>. Troque 3 iguais ou 3 diferentes por exércitos: <b>4, 6, 8, 10, 12, 15, 18, 20</b>, depois +5." +
         "</div>" +
         '<div class="field"><span class="flabel">Adversários (bots)</span>' +
           '<div class="stepper"><button class="iconbtn" id="advMinus">−</button>' +
@@ -573,14 +704,20 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- zoom --------
+  // Muda o tamanho do mapa mantendo no centro da tela o que já estava lá.
   function aplicarZoom() {
+    const sc = document.getElementById("boardScroll");
+    const fx = (sc.scrollLeft + sc.clientWidth / 2) / (sc.scrollWidth || 1);
+    const fy = (sc.scrollTop + sc.clientHeight / 2) / (sc.scrollHeight || 1);
     document.getElementById("board").style.width = (zoom * 100) + "%";
+    sc.scrollLeft = fx * sc.scrollWidth - sc.clientWidth / 2;
+    sc.scrollTop = fy * sc.scrollHeight - sc.clientHeight / 2;
   }
 
   // -------- ligações de UI --------
   function ligarUI() {
     document.getElementById("newGame").addEventListener("click", mostrarInicio);
-    document.getElementById("zoomIn").addEventListener("click", function () { zoom = Math.min(3, zoom + 0.25); aplicarZoom(); });
+    document.getElementById("zoomIn").addEventListener("click", function () { zoom = Math.min(4, zoom + 0.25); aplicarZoom(); });
     document.getElementById("zoomOut").addEventListener("click", function () { zoom = Math.max(1, zoom - 0.25); aplicarZoom(); });
     document.getElementById("moverMinus").addEventListener("click", function () { moverAjuste(-1); });
     document.getElementById("moverPlus").addEventListener("click", function () { moverAjuste(1); });
@@ -589,6 +726,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- start --------
+  instalarDefsCartas();
   construir();
   ligarUI();
   mostrarInicio();

@@ -22,6 +22,7 @@
             pequeno relatório do que fez.
 
    SUB-FUNÇÕES (também soltas, pra reaproveitar e depurar):
+       botTrocar(estado)     — antes do reforço: troca cartas sempre que puder
        botReforcar(estado)   — fase 1: posiciona reforços nas fronteiras
        botAtacar(estado)     — fase 2: ataca só com vantagem boa
        botRemanejar(estado)  — fase 3: leva tropa do fundo pro front
@@ -122,6 +123,20 @@ function botValorAlvo(estado, id, alvo) {
      (2) espalha o geral nas fronteiras, "water-filling" como antes
          (enche cada fronteira até vencer o alvo, sobra na mais valiosa).
    ---------------------------------------------------------------- */
+// Troca cartas sempre que houver uma troca válida (exército cedo vale
+// mais; e evita chegar às 5 cartas). acharTroca já prefere cartas de
+// territórios do bot (+2) e poupa coringas.
+function botTrocar(estado) {
+  let trocas = 0;
+  while (estado.fase === "reforco" && trocas < 10) {
+    const trio = acharTroca(estado, estado.vez);
+    if (!trio) break;
+    if (!trocarCartas(estado, trio).ok) break;
+    trocas++;
+  }
+  return { ok: true, trocas: trocas };
+}
+
 function botReforcar(estado) {
   const id = estado.vez;
   if (estado.fase !== "reforco") return { ok: false, erro: "Não é a fase de reforços." };
@@ -386,6 +401,7 @@ function jogarTurnoBot(estado) {
 
   // (1) Reforço
   if (estado.fase === "reforco") {
+    acoes.trocas = botTrocar(estado);
     acoes.reforco = botReforcar(estado);
     // Rede de segurança: se sobrou reforço por qualquer motivo, drena
     // respeitando a restrição de região, pra poder fechar a fase.

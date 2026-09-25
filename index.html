@@ -7,7 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="estilo.css">
+<!-- ?v=N: número de versão. Aumente a cada atualização para o navegador
+     buscar os arquivos novos em vez de usar a cópia guardada. -->
+<link rel="stylesheet" href="estilo.css?v=3">
 </head>
 <body>
 <div id="app">
@@ -44,6 +46,8 @@
 
       <div class="actions" id="actions"></div>
 
+      <div class="cartasbox" id="cartasBox"></div>
+
       <div id="mover">
         <div class="lbl" id="moverLbl"></div>
         <div class="stepper">
@@ -68,10 +72,11 @@
 <div id="overlay"></div>
 <div id="toast"></div>
 
-<script src="mapa.js"></script>
-<script src="motor.js"></script>
-<script src="bots.js"></script>
-<script src="desenho.js"></script>
-<script src="telas.js"></script>
+<script src="mapa.js?v=3"></script>
+<script src="motor.js?v=3"></script>
+<script src="bots.js?v=3"></script>
+<script src="desenho.js?v=3"></script>
+<script src="cartas.js?v=3"></script>
+<script src="telas.js?v=3"></script>
 </body>
 </html>
