@@ -25,7 +25,9 @@ const { chromium } = require("playwright");
 const RAIZ = path.join(__dirname, "..");
 const PRINTS = process.argv.includes("--prints");
 const PASTA_PRINTS = path.join(__dirname, "prints");
-const TIPOS = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png" };
+const TIPOS = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".png": "image/png",
+  ".webmanifest": "application/manifest+json", ".webp": "image/webp" };
+let versaoSW = null; // para simular uma versão nova do app no teste de atualização
 
 let falhas = 0;
 function checar(nome, ok, detalhe) {
@@ -40,6 +42,7 @@ const servidor = http.createServer(function (req, res) {
   const f = path.join(RAIZ, arq);
   if (!f.startsWith(RAIZ) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
   let corpo = fs.readFileSync(f);
+  if (arq === "/sw.js" && versaoSW !== null) corpo = corpo.toString().replace(/const VERSAO = \d+;/, "const VERSAO = " + versaoSW + ";");
   if (arq === "/telas.js") {
     corpo = corpo.toString().replace("  instalarDefsCartas();",
       "  window.__e = function () { return estado; }; window.__render = function () { render(); };\n  instalarDefsCartas();");
@@ -271,9 +274,42 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     await print(r, "11-rapida-fim");
     checar("nenhum erro no console (Partida Rápida)", r.erros.length === 0, r.erros.join(" | "));
 
-    // ---------- celular ----------
-    console.log("\nCelular (390 x 844)");
-    const c = await abrir(browser, { width: 390, height: 844 });
+    // ---------- celular em pé: aviso de girar ----------
+    console.log("\nCelular em pé (390 x 844)");
+    const cp = await abrir(browser, { width: 390, height: 844 });
+    checar("aviso 'Gire o celular' cobre a tela", await cp.evaluate(function () {
+      const a = document.getElementById("gireAviso"), r = a.getBoundingClientRect();
+      return getComputedStyle(a).display !== "none" && r.width >= innerWidth && r.height >= innerHeight;
+    }));
+    await print(cp, "13-celular-em-pe");
+
+    // ---------- celular deitado ----------
+    console.log("\nCelular deitado (844 x 390)");
+    const cd = await abrir(browser, { width: 844, height: 390 });
+    checar("sem aviso de girar quando deitado", await cd.$eval("#gireAviso", function (a) { return getComputedStyle(a).display === "none"; }));
+    checar("janela de início rola e cabe na altura", await cd.evaluate(function () {
+      const m = document.querySelector(".modalInicio"), r = m.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight + 1 && m.scrollHeight > m.clientHeight;
+    }));
+    await print(cd, "14-deitado-inicio");
+    await cd.click("#startBtn"); await cd.waitForTimeout(400);
+    const dl = await cd.evaluate(function () {
+      const pn = document.getElementById("panel"), bs = document.getElementById("boardScroll"), h = document.querySelector("header");
+      const rp = pn.getBoundingClientRect(), rb = bs.getBoundingClientRect();
+      const internas = Array.from(pn.children).filter(function (x) { const o = getComputedStyle(x).overflowY; return o === "auto" || o === "scroll"; }).length;
+      return { lado: rp.left >= rb.right - 1 && rb.width > rp.width * 1.8, cab: h.scrollWidth <= h.clientWidth && h.getBoundingClientRect().height <= 44,
+        pagina: document.documentElement.scrollWidth <= innerWidth, internas: internas, rola: getComputedStyle(pn).overflowY === "auto" };
+    });
+    checar("mapa à esquerda, painel à direita", dl.lado);
+    checar("cabeçalho baixo e cabe na largura", dl.cab);
+    checar("página não rola para o lado (deitado)", dl.pagina);
+    checar("painel rola como uma página só (deitado)", dl.rola && dl.internas === 0, dl.internas + " rolagens internas");
+    await print(cd, "15-deitado-jogo");
+    checar("nenhum erro no console (deitado)", cd.erros.length === 0, cd.erros.join(" | "));
+
+    // ---------- tablet em pé (layout de coluna, como antes) ----------
+    console.log("\nTablet em pé (768 x 1024)");
+    const c = await abrir(browser, { width: 768, height: 1024 });
     await c.click("#startBtn"); await c.waitForTimeout(400);
     const cel = await c.evaluate(function () {
       const pn = document.getElementById("panel"), h = document.querySelector("header");
@@ -285,11 +321,53 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     checar("painel aberto ocupa metade da tela", cel.meio);
     checar("painel rola como uma página só", cel.internas === 0, cel.internas + " rolagens internas");
     await print(c, "06-celular");
-    checar("nenhum erro no console (celular)", c.erros.length === 0, c.erros.join(" | "));
-    const c2 = await abrir(browser, { width: 390, height: 844 });
+    checar("nenhum erro no console (tablet)", c.erros.length === 0, c.erros.join(" | "));
+    const c2 = await abrir(browser, { width: 844, height: 390 });
     await c2.click('.modoOpcao[data-modo="grande"]');
-    checar("início do Grande Exército cabe no celular", await c2.evaluate(function () { return document.documentElement.scrollWidth <= innerWidth; }));
+    checar("início do Grande Exército cabe no celular deitado", await c2.evaluate(function () { return document.documentElement.scrollWidth <= innerWidth; }));
     await print(c2, "12-celular-grande");
+
+    // ---------- app: instalável, sem internet e atualização ----------
+    console.log("\nApp (PWA)");
+    const vIndex = Number((fs.readFileSync(path.join(RAIZ, "index.html"), "utf8").match(/\?v=(\d+)/) || [])[1]);
+    const vSW = Number((fs.readFileSync(path.join(RAIZ, "sw.js"), "utf8").match(/const VERSAO = (\d+);/) || [])[1]);
+    checar("VERSAO do sw.js igual ao ?v= do index.html", vIndex > 0 && vIndex === vSW, vIndex + " / " + vSW);
+    const man = JSON.parse(fs.readFileSync(path.join(RAIZ, "manifest.webmanifest"), "utf8"));
+    checar("manifesto: deitado, tela cheia e ícones que existem", man.orientation === "landscape" && man.display === "fullscreen" &&
+      man.icons.length >= 4 && man.icons.every(function (i) { return fs.existsSync(path.join(RAIZ, i.src)); }));
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } });
+    const a = await ctx.newPage(); a.erros = [];
+    a.on("pageerror", function (e) { a.erros.push(e.message); });
+    await a.route("**/fonts.googleapis.com/**", function (r) { return r.abort(); });
+    const base = "http://localhost:" + servidor.address().port + "/";
+    await a.goto(base);
+    await a.evaluate(function () { return navigator.serviceWorker.ready; });
+    await a.reload(); await a.waitForTimeout(500);
+    const guardados = await a.evaluate(async function () {
+      const nomes = await caches.keys(); const c = await caches.open(nomes[0]);
+      return { nomes: nomes, n: (await c.keys()).length, controla: !!navigator.serviceWorker.controller };
+    });
+    checar("service worker guarda os arquivos do jogo", guardados.controla && guardados.n >= 17, JSON.stringify(guardados));
+    await ctx.setOffline(true);
+    await a.reload(); await a.waitForTimeout(500);
+    checar("sem internet o jogo abre", (await a.$$(".modoOpcao")).length === 6);
+    await a.click("#startBtn"); await a.waitForTimeout(300);
+    checar("sem internet dá para começar partida", (await a.$eval("#phaseTag", function (e) { return e.textContent; })) === "Reforço");
+    await ctx.setOffline(false);
+    // simula uma versão nova publicada: o aviso aparece e, ao tocar, atualiza
+    versaoSW = vSW + 1;
+    await a.evaluate(function () { return navigator.serviceWorker.getRegistration().then(function (r) { return r.update(); }); });
+    for (let w = 0; w < 40 && (await a.$eval("#atualizaBanner", function (b) { return b.hidden; })); w++) await a.waitForTimeout(150);
+    const txt = await a.$eval("#atualizaBanner", function (b) { return b.hidden ? "" : b.innerText; });
+    checar("aviso 'Nova versão disponível' aparece", txt.indexOf("Nova versão disponível") >= 0 && txt.indexOf("recomeça") >= 0, txt.replace(/\n/g, " "));
+    await print(a, "16-aviso-versao");
+    await Promise.all([a.waitForEvent("load"), a.click("#atualizaBanner")]);
+    await a.waitForTimeout(400);
+    const depois = await a.evaluate(function () { return caches.keys(); });
+    checar("tocar no aviso atualiza (só a versão nova guardada)", depois.length === 1 && depois[0] === "britannia-v" + versaoSW, depois.join(","));
+    checar("nenhum erro no console (app)", a.erros.length === 0, a.erros.join(" | "));
+    versaoSW = null;
+    await ctx.close();
   } finally {
     await browser.close();
     servidor.close();

@@ -966,12 +966,16 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   }
 
   // -------- zoom --------
+  // Celular deitado: no zoom 1 a ilha inteira cabe na altura da tela.
+  const CELULAR_DEITADO = window.matchMedia("(orientation: landscape) and (max-height: 540px)");
   // Muda o tamanho do mapa mantendo no centro da tela o que já estava lá.
   function aplicarZoom() {
     const sc = document.getElementById("boardScroll");
     const fx = (sc.scrollLeft + sc.clientWidth / 2) / (sc.scrollWidth || 1);
     const fy = (sc.scrollTop + sc.clientHeight / 2) / (sc.scrollHeight || 1);
-    document.getElementById("board").style.width = (zoom * 100) + "%";
+    document.getElementById("board").style.width = CELULAR_DEITADO.matches
+      ? Math.round(Math.min(sc.clientWidth, sc.clientHeight * VIEW_W / VIEW_H) * zoom) + "px"
+      : (zoom * 100) + "%";
     sc.scrollLeft = fx * sc.scrollWidth - sc.clientWidth / 2;
     sc.scrollTop = fy * sc.scrollHeight - sc.clientHeight / 2;
   }
@@ -985,6 +989,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     b.setAttribute("aria-expanded", recolhido ? "false" : "true");
     b.title = recolhido ? "Mostrar o painel inteiro" : "Recolher o painel";
     try { localStorage.setItem("painelRecolhido", recolhido ? "1" : "0"); } catch (e) { /* sem armazenamento: tudo bem */ }
+    aplicarZoom(); // a área do mapa mudou de tamanho
   }
 
   function ligarUI() {
@@ -1001,7 +1006,12 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     document.getElementById("moverPlus").addEventListener("click", function () { moverAjuste(1); });
     document.getElementById("moverGo").addEventListener("click", moverConfirmar);
     document.getElementById("moverCancel").addEventListener("click", moverCancelar);
+    // girou o celular / mudou o tamanho da janela: reencaixa o mapa
+    window.addEventListener("resize", function () { clearTimeout(aplicarZoom._t); aplicarZoom._t = setTimeout(aplicarZoom, 120); });
   }
+
+  // Há partida em andamento? (app.js usa para avisar que atualizar recomeça a partida)
+  window.partidaEmAndamento = function () { return !!estado && estado.vencedor === null; };
 
   // -------- start --------
   instalarDefsCartas();
