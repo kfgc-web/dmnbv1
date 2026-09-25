@@ -31,7 +31,7 @@
 
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
      estado = {
-       territorios: { "Devon": { dono: 0, exercitos: 1 }, ... },
+       territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
        jogadores:   [ { id, nome, tipo, cor, vivo }, ... ],
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
@@ -62,8 +62,8 @@ const REGIOES_PARA_VENCER = 5;  // ter 5 das 8 regiões inteiras = vitória
 // guiada). Usa as CHAVES REAIS de REGIOES. O reforço-base (geral) vem por
 // último — ele não entra aqui porque não é preso a nenhuma região.
 const ORDEM_REGIOES_REFORCO = [
-  "Irlanda", "Dál-Riata", "Escócia", "Northumbria",
-  "Mércia", "Ânglia Oriental", "Wessex", "Gales",
+  "Ériu", "Dál Riata", "Alba", "Northhymbre",
+  "Mierce", "East Engle", "Westseaxe", "Cymru",
 ];
 
 const LADOS_DADO = 8;           // dado de 8 lados (d8)
