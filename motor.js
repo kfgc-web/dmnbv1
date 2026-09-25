@@ -47,7 +47,8 @@
        semente, rng:  números da sorte combinada (todo dado/embaralhada sai daqui)
        jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ],
                         objetivo (só no clássico), eliminadoPor (id de quem o eliminou),
-                        reino + pontos (só no Grande Exército), equipe (só no Equipes) }, ... ],
+                        reino + pontos + revide (só no Grande Exército: quem atacou este reino),
+                        equipe (só no Equipes) }, ... ],
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
        fase:              "reforco",    // reforco|ataque|remanejamento|fim
@@ -117,7 +118,7 @@ const MODOS = {
   dominio:  { nome: "Domínio", resumo: "Vence quem dominar 5 das 8 regiões inteiras." },
   total:    { nome: "Conquista Total", resumo: "Só vence o último de pé. Partida longa." },
   rapida:   { nome: "Partida Rápida", resumo: "15 rodadas. No fim, cada território vale 1 ponto, ou 3 se a região inteira for sua." },
-  grande:   { nome: "Grande Exército", resumo: "Os vikings invadem e cada reino é um jogador (9 lugares). Vikings: dominar 4 regiões. Reinos: expulsar os vikings." },
+  grande:   { nome: "Grande Exército", resumo: "Os vikings invadem e cada reino é um jogador (9 lugares). Vikings: dominar 4 regiões. Reinos: expulsar os vikings; vence o reino com mais pontos (1 por exército viking derrotado). Reinos podem se atacar, e quem é atacado revida." },
   equipes:  { nome: "Equipes", resumo: "Duplas ou trios sorteados, sem atacar o parceiro. Vence a equipe com 5 das 8 regiões." },
 };
 const MODO_PADRAO = "dominio";
@@ -721,7 +722,7 @@ function criarPartida(jogadores, opcoes) {
 
   if (modo === "grande") {
     // Cada reino começa com a própria região; os Vikings, com INICIO_VIKINGS.
-    estado.jogadores.forEach(function (j) { j.reino = REINOS_GRANDE[j.id]; j.pontos = 0; });
+    estado.jogadores.forEach(function (j) { j.reino = REINOS_GRANDE[j.id]; j.pontos = 0; j.revide = []; });
     Object.keys(TERRITORIOS).forEach(function (t) {
       const reino = INICIO_VIKINGS.indexOf(t) !== -1 ? VIKINGS : regiaoDe(t);
       estado.territorios[t] = { dono: REINOS_GRANDE.indexOf(reino), exercitos: EXERCITOS_INICIO_GRANDE[reino] || BASE_POR_TERRITORIO };
@@ -988,6 +989,15 @@ function atacar(estado, origem, destino, opcoes) {
   // que o derrotou (no ataque ou na defesa).
   let pontosGanhos = 0;
   if (estado.modo === "grande") {
+    // Reino atacado por outro reino guarda quem o atacou: o bot dele passa a
+    // revidar contra esse jogador (pedido de Kauã: não ataca por conta própria,
+    // mas não morre sem reagir).
+    const vitimaReino = estado.jogadores[d.dono];
+    if (!ehViking(estado, estado.vez) && !ehViking(estado, d.dono) && vitimaReino.revide &&
+        vitimaReino.revide.indexOf(estado.vez) === -1) {
+      vitimaReino.revide.push(estado.vez);
+      anotar(estado, vitimaReino.nome + " foi atacado por " + estado.jogadores[estado.vez].nome + " e vai revidar.");
+    }
     if (ehViking(estado, d.dono) && !ehViking(estado, estado.vez)) {
       pontosGanhos = perdasDefensor;
       estado.jogadores[estado.vez].pontos += perdasDefensor;

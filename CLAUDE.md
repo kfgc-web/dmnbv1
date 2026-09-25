@@ -51,7 +51,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
   - **Reforço (todo turno):** reinos = `max(3, floor(territórios / 2))` + bônus de regiões. Vikings = o mesmo + **3 do mar** (`reforco.mar`), que só vão para território viking no litoral (sem litoral, sem os 3); na sequência guiada vêm depois das regiões e antes do geral. Cartas funcionam normal para todos.
   - **Vitória viking:** Northhymbre + Mierce + East Engle + Westseaxe inteiras (na hora).
   - **Vitória dos reinos:** vikings eliminados → vence o reino **vivo** com mais **pontos** (1 ponto por exército viking derrotado, no ataque e na defesa). Reino eliminado fica fora. Desempate: quem destruiu o último território viking → mais territórios → mais exércitos → cada empatado rola 1 d6, maior vence (rola de novo se empatar).
-  - Reinos podem se atacar; **reinos-bots só atacam os Vikings** (`botAlvos` em `bots.js`, pedido de não forçar a traição). Sem limite de tempo. Lista de jogadores mostra os pontos; os dados mostram "+N pontos"; o fim mostra o placar e o desempate.
+  - Reinos podem se atacar. **Reinos-bots não atacam outro reino por conta própria** (pedido de não forçar a traição), **mas revidam**: reino atacado por outro reino guarda o atacante em `jogadores[id].revide` (motor, em `atacar`) e o bot passa a aceitá-lo como alvo (`botAlvos` em `bots.js`; pedido de Kauã: "não vão só morrer sem reagir"). A crônica avisa "X foi atacado por Y e vai revidar". Sem limite de tempo. Lista de jogadores mostra os pontos; os dados mostram "+N pontos"; o fim mostra o placar e o desempate.
   - Stress (só bots): os reinos vencem ~95% (Vikings ~5%). Com humanos brigando entre si, a chance viking sobe.
 - **Equipes:**
   - Formatos: 4 jogadores = 2×2; 6 = 3×3 ou 2×2×2. Com outro nº de jogadores o modo não aparece.
@@ -201,7 +201,7 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 10. **Modos Partida Rápida, Grande Exército e Equipes**; stress e teste da tela cobrindo os 6 modos. Playtest de Kauã aprovado; dados mantidos (4 d8 × 3 d8 — simulação mostrou equilíbrio); 3×3 fica como está (aparece com 5 adversários).
 11. **App no celular (PWA)**: instalável, abre sem internet, avisa versão nova; ícone do escudo; jogo só deitado no celular.
 12. **Online com amigos** (Firebase `domination-britannia`): sala com código e convite, cor escolhida, equipes montadas na sala, reino escolhido no Grande Exército, partida guardada como lista de jogadas com sorte combinada (motor com `sorte(estado)`), bots pelo juiz, quem cai vira bot em 10 s, botão do parado (60 s), volta sozinho ao reabrir o app.
-13. **Autoria:** README (PT + EN, com prints), LICENSE proprietário, aviso de © no início, DESIGN.md com o registro das decisões de Kauã e `historico/` com os documentos de julho. Online testado por Kauã ("aparentemente funciona").
+13. **Autoria:** README (PT + EN, com prints), LICENSE proprietário, aviso de © no início, DESIGN.md com o registro das decisões de Kauã e `historico/` com os documentos de julho. Online testado por Kauã ("aparentemente funciona"). Grande Exército: descrição explica os pontos e o dilema de atacar os aliados; reinos-bots passam a revidar.
 
 ## 8. Próximos passos (ordem combinada)
 

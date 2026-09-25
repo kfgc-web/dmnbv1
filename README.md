@@ -33,7 +33,7 @@ Conquistou pelo menos um território no turno? Ganha uma **carta**. Três símbo
 - **Domínio:** vence quem dominar 5 das 8 regiões inteiras.
 - **Conquista Total:** só vence o último de pé.
 - **Partida Rápida:** 15 rodadas; no fim, cada território vale 1 ponto, ou 3 se a região inteira for sua.
-- **Grande Exército:** os vikings invadem e cada reino é um jogador (9 lugares). Os vikings vencem se dominarem 4 regiões. Os reinos precisam expulsá-los, mas **só um reino vence**: o que tiver mais **pontos**, e cada exército viking derrotado vale 1 ponto. Os reinos também podem se atacar. Por isso, quem está longe dos vikings (na Irlanda, por exemplo) precisa decidir se ataca ou não os seus "aliados": se atacar, compra briga com eles; se não atacar, dificilmente fará pontos e quase não terá chance de vencer.
+- **Grande Exército:** os vikings invadem e cada reino é um jogador (9 lugares). Os vikings vencem se dominarem 4 regiões. Os reinos precisam expulsá-los, mas **só um reino vence**: o que tiver mais **pontos**, e cada exército viking derrotado vale 1 ponto. Os reinos também podem se atacar. Por isso, quem está longe dos vikings (na Irlanda, por exemplo) precisa decidir se ataca ou não os seus "aliados": se atacar, compra briga com eles (até os bots revidam); se não atacar, dificilmente fará pontos e quase não terá chance de vencer.
 - **Equipes:** duplas ou trios, sem atacar o parceiro. Vence a equipe com 5 das 8 regiões.
 
 ### Jogar online com amigos
@@ -86,7 +86,7 @@ Conquered at least one territory this turn? You draw a **card**. Three matching 
 - **Domination:** hold 5 of the 8 regions entirely.
 - **Total Conquest:** last one standing wins.
 - **Quick Match:** 15 rounds; at the end each territory is worth 1 point, or 3 if you hold its whole region.
-- **Great Army:** the Vikings invade and every kingdom is a player (9 seats). The Vikings win by holding 4 regions. The kingdoms must drive them out, but **only one kingdom wins**: the one with the most **points**, and every Viking army defeated is worth 1 point. Kingdoms may also attack each other. So a kingdom far from the Vikings (Ireland, for example) has to decide whether to turn on its "allies": attack them and you make enemies; hold back and you will hardly score, leaving you almost no chance to win.
+- **Great Army:** the Vikings invade and every kingdom is a player (9 seats). The Vikings win by holding 4 regions. The kingdoms must drive them out, but **only one kingdom wins**: the one with the most **points**, and every Viking army defeated is worth 1 point. Kingdoms may also attack each other. So a kingdom far from the Vikings (Ireland, for example) has to decide whether to turn on its "allies": attack them and you make enemies (even bots strike back); hold back and you will hardly score, leaving you almost no chance to win.
 - **Teams:** pairs or trios who can't attack each other. The team holding 5 of the 8 regions wins.
 
 ### Play online with friends

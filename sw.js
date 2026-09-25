@@ -5,7 +5,7 @@
    quando ela muda, o navegador baixa a versão nova em segundo
    plano e a tela mostra "Nova versão disponível".
    ============================================================ */
-const VERSAO = 16;
+const VERSAO = 17;
 const CACHE = "britannia-v" + VERSAO;
 const ARQUIVOS = [
   "./",
