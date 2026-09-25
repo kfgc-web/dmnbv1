@@ -23,22 +23,28 @@
      terminarAtaque(estado)             -> fecha ataque, abre remanejo
      remanejar(estado, orig, dest, qtd) -> 1 pulo de remanejamento (vários por turno; trava por exército)
      passarVez(estado)                  -> fecha o turno e chama o próximo
+     trocarCartas(estado, indices)      -> troca 3 cartas da mão por exércitos (fase de reforço)
 
    CONSULTAS (perguntas, não mudam nada):
      territoriosDe, contarExercitos, regioesDominadas,
      inimigosVizinhos, ehFronteira, frescosEm, jogadoresVivos,
-     verificarVitoria, resumoJogadores
+     verificarVitoria, resumoJogadores,
+     acharTroca, trocaValida, valorDaTroca, simboloDoTerritorio
 
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
      estado = {
        territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
-       jogadores:   [ { id, nome, tipo, cor, vivo }, ... ],
+       jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ] }, ... ],
        vez:               0,            // id de quem joga agora
        turno:             1,            // contador de rodadas
        fase:              "reforco",    // reforco|ataque|remanejamento|fim
        reforcosPendentes: 0,            // total de reforços que faltam posicionar
        reforco:           {...},        // detalhamento do reforço: { base, porRegiao, ordem }
        movidos:           {...},        // por território: exércitos que JÁ moveram nesta fase de remanejo (travados)
+       baralho:           [ {t, s}, ...], // cartas para comprar (t = território ou null no coringa)
+       descarte:          [ ... ],      // cartas já trocadas (voltam ao baralho quando ele acaba)
+       trocasFeitas:      0,            // quantas trocas a mesa já fez (define o valor da próxima)
+       conquistouNoTurno: false,        // o jogador da vez já conquistou algo neste turno?
        vencedor:          null,         // id quando alguém vence
        ultimoEvento:      {...},        // último acontecimento (p/ a tela)
        log:               [ "...", ]    // histórico curto (p/ depurar/feed)
@@ -69,6 +75,15 @@ const ORDEM_REGIOES_REFORCO = [
 const LADOS_DADO = 8;           // dado de 8 lados (d8)
 const MAX_DADOS_ATAQUE = 4;     // atacante rola até 4
 const MAX_DADOS_DEFESA = 3;     // defensor rola até 3
+
+// CARTAS — uma por território (símbolo fixo) + coringas.
+const SIMBOLOS = ["espada", "escudo", "navio"];
+const CORINGAS = 2;
+// Quanto rende cada troca, na ordem em que a MESA troca (contador único
+// para todos). Depois da última da lista, cada troca vale 5 a mais.
+const VALORES_TROCA = [4, 6, 8, 10, 12, 15, 18, 20];
+const BONUS_TERRITORIO_TROCA = 2; // carta trocada de território seu: +2 nele
+const CARTAS_TROCA_OBRIGATORIA = 5; // com 5+ na mão, troca antes de posicionar
 
 // Cor de cada assento (até 6 jogadores).
 const CORES = ["#c0392b", "#2c6fbb", "#27ae60", "#e0a200", "#8e44ad", "#16a085"];
@@ -176,6 +191,45 @@ function verificarVitoria(estado, idJogador) {
   return regioesDominadas(estado, idJogador).length >= REGIOES_PARA_VENCER;
 }
 
+// Símbolo da carta de um território (fixo: segue a ordem de mapa.js,
+// alternando espada/escudo/navio -> 22 espadas, 21 escudos, 21 navios).
+function simboloDoTerritorio(t) {
+  return SIMBOLOS[Object.keys(TERRITORIOS).indexOf(t) % SIMBOLOS.length];
+}
+
+// Quanto vale a troca de número n (0 = primeira troca da mesa).
+function valorDaTroca(n) {
+  if (n < VALORES_TROCA.length) return VALORES_TROCA[n];
+  return VALORES_TROCA[VALORES_TROCA.length - 1] + 5 * (n - VALORES_TROCA.length + 1);
+}
+
+// 3 cartas formam troca? Três iguais OU três diferentes; o coringa vale qualquer símbolo.
+function trocaValida(cartas) {
+  if (!cartas || cartas.length !== 3) return false;
+  const simb = cartas.filter(function (c) { return c.s !== "coringa"; }).map(function (c) { return c.s; });
+  if (simb.length < 3) return true; // com coringa sempre fecha (iguais ou diferentes)
+  const dif = new Set(simb).size;
+  return dif === 1 || dif === 3;
+}
+
+// Melhor troca disponível na mão do jogador (índices de 3 cartas) ou null.
+// Prefere trocas com cartas de territórios SEUS (rendem +2) e poupa coringas.
+function acharTroca(estado, idJogador) {
+  const mao = estado.jogadores[idJogador].cartas || [];
+  let melhor = null, nota = -Infinity;
+  for (let i = 0; i < mao.length; i++) for (let j = i + 1; j < mao.length; j++) for (let k = j + 1; k < mao.length; k++) {
+    const trio = [mao[i], mao[j], mao[k]];
+    if (!trocaValida(trio)) continue;
+    let n = 0;
+    trio.forEach(function (c) {
+      if (c.s === "coringa") n -= 5;
+      else if (estado.territorios[c.t].dono === idJogador) n += 10;
+    });
+    if (n > nota) { nota = n; melhor = [i, j, k]; }
+  }
+  return melhor;
+}
+
 // Um retrato rápido de cada jogador — bom pro painel lateral da tela.
 function resumoJogadores(estado) {
   return estado.jogadores.map(function (j) {
@@ -188,6 +242,7 @@ function resumoJogadores(estado) {
       territorios: territoriosDe(estado, j.id).length,
       exercitos: contarExercitos(estado, j.id),
       regioes: regioesDominadas(estado, j.id),
+      cartas: (j.cartas || []).length,
     };
   });
 }
@@ -233,6 +288,7 @@ function criarPartida(jogadores) {
         tipo: (j.tipo === "bot") ? "bot" : "humano",
         cor: j.cor || CORES[i % CORES.length],
         vivo: true,
+        cartas: [],
       };
     }),
     vez: 0,
@@ -241,6 +297,10 @@ function criarPartida(jogadores) {
     reforcosPendentes: 0,
     reforco: null,               // detalhamento do reforço do jogador da vez (montado abaixo)
     movidos: {},                 // controle de remanejamento (frescos × movidos), por território
+    baralho: [],
+    descarte: [],
+    trocasFeitas: 0,
+    conquistouNoTurno: false,
     vencedor: null,
     ultimoEvento: { tipo: "inicio" },
     log: [],
@@ -253,6 +313,11 @@ function criarPartida(jogadores) {
   baralho.forEach(function (t, i) {
     estado.territorios[t] = { dono: i % n, exercitos: BASE_POR_TERRITORIO };
   });
+
+  // Baralho: uma carta por território + os coringas, embaralhado.
+  const cartas = Object.keys(TERRITORIOS).map(function (t) { return { t: t, s: simboloDoTerritorio(t) }; });
+  for (let c = 0; c < CORINGAS; c++) cartas.push({ t: null, s: "coringa" });
+  estado.baralho = embaralhar(cartas);
 
   // Primeiro turno já montado: o jogador 0 recebe seu lote de reforços
   // (base = territórios ÷ 3, mínimo 3; + bônus por região completa) para posicionar.
@@ -310,6 +375,8 @@ function posicionarReforco(estado, territorio, qtd) {
   if (alvo.dono !== estado.vez)
     return { ok: false, erro: "Esse território não é seu." };
   if (qtd < 1) return { ok: false, erro: "Quantidade inválida." };
+  if (trocaObrigatoria(estado))
+    return { ok: false, erro: "Você tem " + estado.jogadores[estado.vez].cartas.length + " cartas: troque antes de posicionar." };
 
   // Bolsões disponíveis para ESTE território: o da sua região (se houver) + o geral.
   const rf = estado.reforco || { base: estado.reforcosPendentes, porRegiao: {}, ordem: [] };
@@ -345,9 +412,69 @@ function terminarReforco(estado) {
     return { ok: false, erro: "Não é a fase de reforços." };
   if (estado.reforcosPendentes > 0)
     return { ok: false, erro: "Ainda falta posicionar " + estado.reforcosPendentes + " reforço(s)." };
+  if (trocaObrigatoria(estado))
+    return { ok: false, erro: "Você tem " + estado.jogadores[estado.vez].cartas.length + " cartas: troque antes de seguir." };
   estado.fase = "ataque";
   estado.ultimoEvento = { tipo: "faseAtaque" };
   return { ok: true };
+}
+
+
+/* ----------------------------------------------------------------
+   CARTAS — troca por exércitos (só na fase de reforço)
+   ---------------------------------------------------------------- */
+// O jogador da vez está com cartas demais e precisa trocar agora?
+function trocaObrigatoria(estado) {
+  const j = estado.jogadores[estado.vez];
+  return (j.cartas || []).length >= CARTAS_TROCA_OBRIGATORIA;
+}
+
+// Troca 3 cartas da mão (índices) por exércitos. O valor segue o contador
+// da MESA (4, 6, 8, 10, 12, 15, 18, 20, depois +5). Esses exércitos entram
+// no reforço GERAL (o último da sequência do Modo B). Cada carta trocada de
+// um território do próprio jogador põe +2 direto nele.
+function trocarCartas(estado, indices) {
+  if (estado.fase !== "reforco")
+    return { ok: false, erro: "Só dá para trocar cartas na fase de reforços." };
+  const j = estado.jogadores[estado.vez];
+  const mao = j.cartas || [];
+  if (!indices || indices.length !== 3 || new Set(indices).size !== 3 ||
+      indices.some(function (i) { return i < 0 || i >= mao.length; }))
+    return { ok: false, erro: "Escolha 3 cartas da sua mão." };
+  const trio = indices.map(function (i) { return mao[i]; });
+  if (!trocaValida(trio))
+    return { ok: false, erro: "Precisa ser 3 símbolos iguais ou 3 diferentes (o coringa vale qualquer um)." };
+
+  const valor = valorDaTroca(estado.trocasFeitas);
+  estado.trocasFeitas += 1;
+  if (!estado.reforco) estado.reforco = { base: 0, porRegiao: {}, ordem: [] };
+  estado.reforco.base += valor;
+  estado.reforcosPendentes += valor;
+
+  const bonusEm = [];
+  trio.forEach(function (c) {
+    if (c.t && estado.territorios[c.t].dono === estado.vez) {
+      estado.territorios[c.t].exercitos += BONUS_TERRITORIO_TROCA;
+      bonusEm.push(c.t);
+    }
+  });
+  indices.slice().sort(function (a, b) { return b - a; }).forEach(function (i) { mao.splice(i, 1); });
+  trio.forEach(function (c) { estado.descarte.push(c); });
+
+  anotar(estado, j.nome + " trocou cartas: +" + valor + " exércitos" +
+    (bonusEm.length ? " (+" + BONUS_TERRITORIO_TROCA + " em " + bonusEm.join(", ") + ")" : "") + ".");
+  estado.ultimoEvento = { tipo: "troca", valor: valor, bonusEm: bonusEm };
+  return { ok: true, valor: valor, bonusEm: bonusEm, proxima: valorDaTroca(estado.trocasFeitas) };
+}
+
+// Tira uma carta do baralho para o jogador (reembaralha o descarte se acabar).
+function comprarCarta(estado, idJogador) {
+  if (!estado.baralho.length) { estado.baralho = embaralhar(estado.descarte); estado.descarte = []; }
+  if (!estado.baralho.length) return null;
+  const c = estado.baralho.pop();
+  estado.jogadores[idJogador].cartas.push(c);
+  anotar(estado, estado.jogadores[idJogador].nome + " recebeu uma carta.");
+  return c;
 }
 
 
@@ -404,14 +531,24 @@ function atacar(estado, origem, destino, opcoes) {
     conquistou = true;
     // Quantos mover pra dentro: por padrão, o nº de dados que rolou.
     // Pode pedir outro valor em opcoes.mover. Sempre deixa 1 pra trás.
+    const donoAntigo = d.dono;
     let mover = (opcoes.mover != null) ? opcoes.mover : nAtq;
     mover = Math.max(1, Math.min(mover, a.exercitos - 1));
     a.exercitos -= mover;
     d.exercitos = mover;
     d.dono = estado.vez;
     exercitosMovidos = mover;
+    estado.conquistouNoTurno = true;
     anotar(estado, estado.jogadores[estado.vez].nome + " conquistou " + destino + ".");
     marcarEliminados(estado);
+    // Quem elimina um jogador fica com as cartas dele.
+    const vitima = estado.jogadores[donoAntigo];
+    if (!vitima.vivo && vitima.cartas && vitima.cartas.length) {
+      const herdadas = vitima.cartas.length;
+      estado.jogadores[estado.vez].cartas = estado.jogadores[estado.vez].cartas.concat(vitima.cartas);
+      vitima.cartas = [];
+      anotar(estado, estado.jogadores[estado.vez].nome + " ficou com " + herdadas + " carta(s) de " + vitima.nome + ".");
+    }
     // Se sobrou um só jogador vivo, a partida acaba na hora.
     if (jogadoresVivos(estado).length === 1)
       declararVitoria(estado, jogadoresVivos(estado)[0].id);
@@ -497,16 +634,21 @@ function passarVez(estado) {
 
   marcarEliminados(estado);
 
+  // Conquistou pelo menos 1 território neste turno? Ganha UMA carta.
+  let carta = null;
+  if (estado.conquistouNoTurno) carta = comprarCarta(estado, estado.vez);
+  estado.conquistouNoTurno = false;
+
   // Vitória do jogador da vez? (5+ regiões inteiras agora)
   if (verificarVitoria(estado, estado.vez)) {
     declararVitoria(estado, estado.vez);
-    return { ok: true, vencedor: estado.vez };
+    return { ok: true, vencedor: estado.vez, carta: carta };
   }
   // Sobrou um só jogador? (vitória por "último de pé")
   if (jogadoresVivos(estado).length === 1) {
     const ultimo = jogadoresVivos(estado)[0].id;
     declararVitoria(estado, ultimo);
-    return { ok: true, vencedor: ultimo };
+    return { ok: true, vencedor: ultimo, carta: carta };
   }
 
   // Procura o próximo jogador VIVO, no sentido horário.
@@ -526,5 +668,5 @@ function passarVez(estado) {
   estado.reforco = { base: det.base, porRegiao: det.porRegiao, ordem: det.ordem };
   estado.reforcosPendentes = det.total;
   estado.ultimoEvento = { tipo: "novaVez", jogador: proximo, reforcos: estado.reforcosPendentes };
-  return { ok: true, vez: proximo, reforcos: estado.reforcosPendentes };
+  return { ok: true, vez: proximo, reforcos: estado.reforcosPendentes, carta: carta };
 }

@@ -48,7 +48,7 @@
       radial-gradient(120% 90% at 50% 18%, #161d27 0%, #0c0f15 55%, #080a0e 100%);
   }
   #boardInner{ min-width:100%; min-height:100%; display:flex; }
-  #board{ display:block; width:100%; height:auto; margin:auto; }
+  #board{ display:block; width:100%; height:auto; margin:auto; flex-shrink:0; }
 
   /* ---------- mapa desenhado (estilo WAR) ---------- */
   .mar{ fill:#0f2230; }
@@ -123,13 +123,13 @@
 
   /* ---------- dice overlay ---------- */
   #dice{
-    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    position:absolute; top:14px; left:50%; transform:translate(-50%,-100%);
     background:rgba(12,16,22,.94); border:1px solid var(--line); border-radius:12px;
     padding:12px 16px; display:none; gap:14px; align-items:center; pointer-events:none;
     box-shadow:0 12px 40px rgba(0,0,0,.5); z-index:5;
   }
   #dice.on{ display:flex; animation:popin .25s ease-out; }
-  @keyframes popin{ from{ opacity:0; transform:translate(-50%,-8px) scale(.9);} to{ opacity:1;} }
+  @keyframes popin{ from{ opacity:0; transform:translate(-50%,calc(-100% + 8px)) scale(.9);} to{ opacity:1; transform:translate(-50%,-100%);} }
   .dside{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   .dside .cap{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
   .dice-row{ display:flex; gap:6px; }
@@ -159,6 +159,32 @@
   #winRegions{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 20px; }
   .chip{ font-size:11px; padding:4px 9px; border-radius:999px; background:var(--ink2);
     border:1px solid var(--bone-dim); color:var(--bone); }
+
+  /* ---------- cartas ---------- */
+  .cartasbox{ padding:12px 16px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
+  .cartashead{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .cartashead h3{ font-family:"Cinzel",serif; font-size:11px; letter-spacing:.18em; color:var(--muted);
+    text-transform:uppercase; margin:0; }
+  .cartasinfo{ font-size:12px; color:var(--muted); }
+  .cartasinfo b{ color:var(--bone); }
+  .cartasvazio{ font-size:12px; color:var(--muted); margin:0; line-height:1.45; }
+  .maoChips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chipCarta{ display:inline-flex; align-items:center; gap:5px; padding:3px 8px 3px 4px; border-radius:6px;
+    background:#e8d9ae; color:#1f160a; font-size:12px; font-weight:600; font-family:Georgia,serif; }
+  .chipCarta .ct-icone{ flex-shrink:0; }
+  .modal.modalCartas{ max-width:760px; max-height:92vh; overflow:auto; }
+  .mesaCartas{ display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:0 0 14px; }
+  .cartaBtn{ padding:0; border:none; background:none; border-radius:12px; width:124px; cursor:pointer;
+    transition:transform .15s, box-shadow .15s; line-height:0; }
+  .cartaBtn:hover:not(:disabled){ background:none; transform:translateY(-3px); }
+  .cartaBtn:disabled{ opacity:1; cursor:default; }
+  .cartaBtn .carta{ width:100%; height:auto; display:block; }
+  .cartaBtn.sel{ transform:translateY(-8px); box-shadow:0 0 0 3px var(--bone), 0 10px 24px rgba(0,0,0,.5); }
+  .cartaBtn:focus-visible{ outline:2px solid var(--bone); outline-offset:3px; }
+  .trocaStatus{ font-size:13px; color:var(--text); text-align:center; margin:0 0 14px; min-height:1.3em; }
+  .trocaStatus b{ color:var(--bone); }
+  .trocaAcoes{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  @media (max-width:520px){ .cartaBtn{ width:96px; } .modal.modalCartas{ padding:18px; } }
 
   /* ---------- toast ---------- */
   #toast{

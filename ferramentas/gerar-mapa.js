@@ -68,7 +68,7 @@ const ANCORAS = {
   "Northworthig": [[52.95, -1.6]],
   "Doneceaster": [[53.4, -1.5]],
   "Snotingaham": [[53.05, -1.05], [53.6, -0.95]],
-  "Lindcylene": [[53.25, -0.4]],
+  "Lindcylene": [[53.25, -0.4], [53.6, -0.75]],
   "Ligeraceaster": [[52.65, -1.15]],
   // Cymru
   "Gwynedd": [[52.95, -3.95]],
@@ -78,7 +78,7 @@ const ANCORAS = {
   // Northhymbre
   "Rippel": [[53.8, -2.75]],
   "Mameceaster": [[53.5, -2.2], [53.8, -1.55]],
-  "Beoferlic": [[53.85, -0.5], [53.75, -0.9]],
+  "Eoforwic": [[53.85, -0.5], [53.75, -0.9], [53.7, -0.8]],
   "Streoneshalh": [[54.3, -1.4]],
   "Bebbanburg": [[55.1, -1.65], [55.55, -1.8]],
   "Hagustaldesham": [[54.85, -2.3]],
@@ -87,15 +87,15 @@ const ANCORAS = {
   "Mailros": [[55.45, -2.8], [55.15, -2.8]],
   // Dál Riata
   "Hwiterne": [[54.95, -4.4], [55.0, -3.3]],
-  "Alt Clut": [[55.8, -4.3]],
+  "Alt Clut": [[55.8, -4.3], [56.05, -4.6]],
   "Daire": [[55.0, -7.1]],
-  "Ard Sratha": [[54.6, -7.3]],
+  "Ard Sratha": [[54.6, -7.3], [54.62, -6.75]],
   "Beannchar": [[54.6, -6.0]],
   "Mön": [[54.23, -4.55]],
   // Alba
   "Sgáin": [[56.45, -3.1], [56.2, -3.1]],
   "Fothuirtabaicht": [[56.3, -4.1], [56.8, -3.8]],
-  "Dún Att": [[56.1, -5.3], [56.6, -4.5]],
+  "Dún Att": [[56.1, -5.3], [56.6, -4.5], [56.2, -4.85]],
   "Gleann Comhann": [[56.75, -5.1]],
   "Inbhir Nis": [[57.4, -4.2]],
   "Dún Foithir": [[57.1, -2.4], [57.0, -3.2]],
@@ -105,23 +105,31 @@ const ANCORAS = {
   // Ériu
   "Ráth Bhoth": [[54.95, -7.9]],
   "Droim Chliabh": [[54.2, -8.5]],
-  "Cruachan": [[53.85, -8.2], [53.75, -7.8]],
-  "Mainistir Bhuithe": [[53.95, -6.6]],
+  "Cruachan": [[53.85, -8.2], [53.75, -7.8], [54.3, -7.2]],
+  "Mainistir Bhuithe": [[53.95, -6.6], [54.35, -6.45]],
   "Dyflin": [[53.4, -6.4], [53.55, -7.2]],
   "Achadh Bhó": [[53.0, -7.3], [52.8, -6.25], [52.8, -7.9]],
   "Cill Chainnigh": [[52.6, -7.2], [52.35, -6.6]],
   "Lios Mór": [[52.2, -7.5]],
   "Corcach": [[51.85, -8.6]],
   "Mungairit": [[52.45, -8.4], [52.5, -8.0]],
-  "Inis Faithlinn": [[52.05, -9.6]],
-  "Inis Cealtra": [[52.85, -9.0], [52.95, -8.3]],
+  "Inis Faithlinn": [[52.05, -9.6], [52.55, -8.95]],
+  "Inis Cealtra": [[52.85, -9.0], [52.95, -8.3], [52.72, -8.8]],
   "Cluain Mhic Nóis": [[53.35, -8.4], [53.3, -9.2]],
   "Maigh Eo": [[53.85, -9.3]],
 };
 
+// Lagos de verdade abertos no mapa (centro [lat, lon], raios em graus).
+// O Lough Neagh separa quatro territórios que se encontrariam num ponto só.
+const LAGOS = [
+  { nome: "Lough Neagh", lat: 54.61, lon: -6.42, rLat: 0.14, rLon: 0.13 },
+];
+
 // Ilhas sem âncora vão para o território mais próximo — exceto estas regras.
 function donoDaIlha(lat, lon) {
-  if (lat > 56.7 && lon < -6.1) return "Ljóðhús";        // Hébridas Exteriores
+  if (lat > 56.7 && lon < -6.9) return "Ljóðhús";        // Hébridas Exteriores (Uist, Barra...)
+  // Skye, Rùm e Eigg (Hébridas Interiores) ficam com a terra firme mais
+  // próxima: Skye -> Apor Crosán; Rùm e Eigg -> Gleann Comhann.
   if (lat > 58.65 && lon > -3.6) return "Kirkjuvágr";     // Órcades
   return null;
 }
@@ -223,6 +231,15 @@ function pop() {
   return [c, v];
 }
 const pretendente = new Int32Array(N).fill(-1);
+const LAGO = -2;
+for (const L of LAGOS) {
+  const [cx, cy] = tela(L.lon, L.lat);
+  const rx = L.rLon * KX * ESC, ry = L.rLat * ESC;
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+    const c = y * W + x;
+    if (terra[c] && ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1) dono[c] = LAGO;
+  }
+}
 function terraMaisProxima(px, py) {
   for (let r = 0; r < 60; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -253,12 +270,20 @@ comps.forEach((cel, id) => {
     for (const n of NOMES) for (const [ax, ay] of ancorasPx[n]) { const d = Math.hypot(ax - sx, ay - sy); if (d < best) { best = d; t = n; } } }
   for (const c of cel) dono[c] = IDX[t];
 });
+// Folga: dois territórios que NÃO são vizinhos no jogo ficam a pelo menos
+// FOLGA pixels um do outro — nem na ponta (diagonal) podem se tocar, senão
+// parecem vizinhos no desenho.
+const FOLGA = 3;
+const VIZ8D = [];
+for (let dy = -FOLGA; dy <= FOLGA; dy++) for (let dx = -FOLGA; dx <= FOLGA; dx++) if (dx || dy) VIZ8D.push([dx, dy]);
 function cabe(c, ti) {
   const x = c % W, y = (c / W) | 0;
-  for (const [dx, dy] of VIZ4) {
+  for (const [dx, dy] of VIZ8D) {
     const nx = x + dx, ny = y + dy;
     if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-    const u = dono[ny * W + nx];
+    const n = ny * W + nx;
+    if (comp[n] !== comp[c]) continue; // através do mar a água já separa
+    const u = dono[n];
     if (u >= 0 && !podeEncostar(ti, u)) return false;
   }
   return true;
@@ -266,7 +291,7 @@ function cabe(c, ti) {
 const VIZ8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]];
 while (heapC.length) {
   const [c, v] = pop();
-  if (dono[c] >= 0 || v > custo[c]) continue;
+  if (dono[c] !== -1 || v > custo[c]) continue;
   const ti = pretendente[c];
   if (!cabe(c, ti)) { custo[c] = Infinity; continue; } // outro pode tentar depois
   dono[c] = ti;
@@ -275,7 +300,7 @@ while (heapC.length) {
     const nx = x + dx, ny = y + dy;
     if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
     const n = ny * W + nx;
-    if (!terra[n] || dono[n] >= 0) continue;
+    if (!terra[n] || dono[n] !== -1) continue;
     if (v + w < custo[n]) { custo[n] = v + w; pretendente[n] = ti; push(n, v + w); }
   }
 }
@@ -284,7 +309,7 @@ let mudou = true;
 while (mudou) {
   mudou = false;
   for (let c = 0; c < N; c++) {
-    if (!terra[c] || dono[c] >= 0) continue;
+    if (!terra[c] || dono[c] !== -1) continue;
     const x = c % W, y = (c / W) | 0;
     for (const [dx, dy] of VIZ4) {
       const nx = x + dx, ny = y + dy;
@@ -294,9 +319,30 @@ while (mudou) {
     }
   }
 }
-const LAGO = -2;
 let lagos = 0;
 for (let c = 0; c < N; c++) if (terra[c] && dono[c] < 0) { dono[c] = LAGO; lagos++; }
+// Onde quatro territórios se fecham em roda sobra um furinho de 1-2 pixels.
+// Ele vira um laguinho visível (raio 4), para as diagonais não parecerem vizinhas.
+{
+  const visto = new Uint8Array(N);
+  for (let c = 0; c < N; c++) {
+    if (dono[c] !== LAGO || visto[c]) continue;
+    const pilha = [c], cel = []; visto[c] = 1;
+    while (pilha.length) {
+      const k = pilha.pop(); cel.push(k);
+      const x = k % W, y = (k / W) | 0;
+      for (const [dx, dy] of VIZ4) { const m = (y + dy) * W + x + dx; if (dono[m] === LAGO && !visto[m]) { visto[m] = 1; pilha.push(m); } }
+    }
+    if (cel.length > 30) continue; // lago de verdade (Lough Neagh), deixa como está
+    let sx = 0, sy = 0; for (const k of cel) { sx += k % W + .5; sy += ((k / W) | 0) + .5; }
+    sx /= cel.length; sy /= cel.length;
+    const R = 4;
+    for (let y = Math.floor(sy - R); y <= Math.ceil(sy + R); y++) for (let x = Math.floor(sx - R); x <= Math.ceil(sx + R); x++) {
+      const k = y * W + x;
+      if (terra[k] && (x + .5 - sx) ** 2 + (y + .5 - sy) ** 2 <= R * R && dono[k] !== LAGO) { dono[k] = LAGO; lagos++; }
+    }
+  }
+}
 
 // ============================================================
 // 4. Conferência: fronteiras desenhadas x vizinhanças do jogo
@@ -307,14 +353,35 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
   if (x + 1 < W) { const b = dono[y * W + x + 1]; if (b >= 0 && b !== a) encostam.add(Math.min(a, b) + "|" + Math.max(a, b)); }
   if (y + 1 < H) { const b = dono[(y + 1) * W + x]; if (b >= 0 && b !== a) encostam.add(Math.min(a, b) + "|" + Math.max(a, b)); }
 }
+// encontro "na ponta" (diagonal) entre não-vizinhos também conta como sobra
+for (let y = 0; y + 1 < H; y++) for (let x = 0; x < W; x++) {
+  const a = dono[y * W + x]; if (a < 0) continue;
+  for (const dx of [-1, 1]) {
+    if (x + dx < 0 || x + dx >= W) continue;
+    const b = dono[(y + 1) * W + x + dx];
+    if (b >= 0 && b !== a) encostam.add(Math.min(a, b) + "|" + Math.max(a, b));
+  }
+}
 const faltando = [], sobrando = [];
 NOMES.forEach((t, a) => VIZ_TERRA[a].forEach(b => { if (a < b && !encostam.has(a + "|" + b)) faltando.push(t + " — " + NOMES[b]); }));
-encostam.forEach(k => { const [a, b] = k.split("|").map(Number); if (!VIZ_TERRA[a].has(b)) sobrando.push(NOMES[a] + " — " + NOMES[b]); });
+// (par ligado por rota marítima pode encostar: já são vizinhos no jogo)
+encostam.forEach(k => { const [a, b] = k.split("|").map(Number); if (!TERRITORIOS[NOMES[a]].vizinhos.includes(NOMES[b])) sobrando.push(NOMES[a] + " — " + NOMES[b]); });
 const area = new Array(NOMES.length).fill(0);
 for (let c = 0; c < N; c++) if (dono[c] >= 0) area[dono[c]]++;
 console.log("escala:", ESC.toFixed(1), "px/grau · pixels de lago:", lagos);
 console.log("fronteiras que FALTAM:", faltando.length ? faltando : "nenhuma");
 console.log("fronteiras que SOBRAM:", sobrando.length ? sobrando : "nenhuma");
+// divisas curtas demais (vizinhos que quase não parecem vizinhos no desenho)
+const comprimento = new Map();
+for (let y = 0; y + 1 < H; y++) for (let x = 0; x + 1 < W; x++) {
+  const a = dono[y * W + x]; if (a < 0) continue;
+  for (const b of [dono[y * W + x + 1], dono[(y + 1) * W + x]]) if (b >= 0 && b !== a) {
+    const k = Math.min(a, b) + "|" + Math.max(a, b); comprimento.set(k, (comprimento.get(k) || 0) + 1);
+  }
+}
+const curtas = [];
+comprimento.forEach((n, k) => { const [a, b] = k.split("|").map(Number); if (n < 10) curtas.push(NOMES[a] + " — " + NOMES[b] + " (" + n + " px)"); });
+console.log("divisas CURTAS (< 10 px):", curtas.length ? curtas : "nenhuma");
 NOMES.forEach((t, i) => { if (area[i] < 900) console.log("  território pequeno:", t, area[i], "px"); });
 
 // ============================================================
