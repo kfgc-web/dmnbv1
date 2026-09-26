@@ -49,6 +49,7 @@ Fontes:
 - **S1:** mensagens de Kauã na sessão do Claude Code iniciada em 24.9.2026 (hoje "aposentada"), transcritas por ele.
 - **S2:** mensagens de Kauã na sessão do Claude Code de 25.9.2026 (online, autoria).
 - **S3:** mensagens de Kauã na sessão do Claude Code de 25.9.2026 (revanche e tutorial).
+- **S4:** chat do Claude, 25.9.2026 (livros, cartas e tabuleiros), transcrito em `instrucoes-livros-code.md`.
 - **G:** histórico de commits do GitHub (datas registradas pelo servidor).
 
 | Data | Decisão | Fonte |
@@ -91,3 +92,9 @@ Fontes:
 | 26.9.2026 | Objetivos novos: "Vamos focar só nos objetivos que eu falei ali. Serão desde objetivos facílimos a dificílimos que pensei em adicionar. Alguns deles: 2, 3, 4, 5 e 6 regiões à escolha. Também, podemos adicionar alguns assim: conquistar reino 1 e 2 e outro reino à sua escolha; conquistar reino 1, 2 e 3; e conquistar reino 1, 2 e 3 e outro reino à sua escolha. [...] Não vamos mexer em nenhum dos que já existem, só vamos adicionar outros vários." | S3; PR #22 |
 | 26.9.2026 | Sobre os 13 propostos por Claude: "a) Sim, estão bons, não vou sugerir nada desta vez. b) Sim, adicione mais 2 combinações: de conquistar 7 e 8 regiões; esses vão ser os mais difíceis, o jogador que pegar eles vai penar kkk. c) Sim, tudo bem que as chances diminuam, não há problema algum." Nomes "Conquistador" (7) e "Senhor Absoluto" (8) aprovados; "Pode seguir." | S3; PR #22 |
 | 26.9.2026 | Autoria dos commits: "Particularmente, não me incomoda, mas registra no meu nome e você fica como coautor então." A partir daqui, commits em nome de Kauã, com o Claude como coautor. | S3; PR #23 |
+| 25.9.2026 / 26.9.2026 | Catálogo das cartas: dividido por reino, com o correspondente moderno, a explicação do nome e as formas nas outras línguas da época; aprovado sem alterações. | S4; PR #24 |
+| 25.9.2026 / 26.9.2026 | Cartas para imprimir: 55 × 88 mm em A4, 9 por folha, com uma folha de versos (moldura + nome do jogo) para colar atrás. | S4; PR #24 |
+| 25.9.2026 / 26.9.2026 | Cartas de objetivo: verso com o nome do jogo e "OBJETIVO"; frente com nome, descrição e mini-mapa das regiões exigidas. | S4; PR #24 |
+| 25.9.2026 / 26.9.2026 | Livro de regras digital: aprovado sem alterações. | S4; PR #24 |
+| 25.9.2026 / 26.9.2026 | Jogo de mesa: só os modos Clássico e Equipes; dados de 6 faces (4 no ataque, 3 na defesa); quem começa é decidido no dado, em sentido horário; equipes combinadas entre os jogadores, sem sorteio. | S4; PR #24 |
+| 25.9.2026 / 26.9.2026 | Tabuleiros em A2 e A3, sem os círculos nos territórios e sem o quadro da ordem do reforço. | S4; PR #24 |

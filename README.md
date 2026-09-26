@@ -58,6 +58,12 @@ Dá para **instalar como app** (pelo navegador: "Instalar" ou "Adicionar à tela
 
 HTML, CSS e JavaScript puro, sem framework e sem etapa de build. As regras ficam em `motor.js`, os bots em `bots.js` e a tela em `telas.js`. O online usa o **Firebase Realtime Database** (baixado só quando você escolhe jogar online). O mapa foi desenhado a partir do litoral real (Natural Earth, domínio público).
 
+### Livros e jogo de mesa
+
+- **Livros de regras:** [versão digital](livros/livro-de-regras-digital.pdf) (o jogo no navegador, no app e online) e [versão de mesa](livros/livro-de-regras-mesa.pdf) (Clássico e Equipes, com dados de 6 faces).
+- **[Catálogo das cartas](livros/catalogo-das-cartas.pdf):** os 8 reinos e os 64 territórios, com o nome de hoje, o significado do nome e como cada lugar era chamado nas outras línguas da época.
+- **Para imprimir:** [cartas de território](livros/imprimir/cartas-de-territorio.pdf), [cartas de objetivo](livros/imprimir/cartas-de-objetivo.pdf), [tabuleiro A2](livros/imprimir/tabuleiro-a2.pdf) e [tabuleiro A3](livros/imprimir/tabuleiro-a3.pdf). As cartas saem em folhas A4, no tamanho 55 × 88 mm, com uma folha de versos para imprimir quantas vezes precisar e colar atrás.
+
 ### Direitos autorais
 
 © 2026 Kauã Felipe Gielow Camargo. Todos os direitos reservados.
@@ -108,6 +114,12 @@ The game **installs as an app** (from the browser: "Install" or "Add to Home Scr
 ### Under the hood
 
 Plain HTML, CSS and JavaScript: no framework, no build step. Rules live in `motor.js`, bots in `bots.js` and the interface in `telas.js`. Online play uses **Firebase Realtime Database** (downloaded only when you choose to play online). The map is drawn from the real coastline (Natural Earth, public domain).
+
+### Rulebooks and tabletop game
+
+- **Rulebooks** (in Portuguese): [digital edition](livros/livro-de-regras-digital.pdf) and [tabletop edition](livros/livro-de-regras-mesa.pdf).
+- **[Card catalogue](livros/catalogo-das-cartas.pdf)** (in Portuguese): the meaning and period forms of every name.
+- **Print and play:** [territory cards](livros/imprimir/cartas-de-territorio.pdf), [objective cards](livros/imprimir/cartas-de-objetivo.pdf), [A2 board](livros/imprimir/tabuleiro-a2.pdf) and [A3 board](livros/imprimir/tabuleiro-a3.pdf). Cards are 55 × 88 mm on A4 sheets, with a sheet of card backs to print as many times as needed and glue on the back.
 
 ### Copyright
 
