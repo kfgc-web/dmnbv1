@@ -21,8 +21,8 @@
    No Equipes (4 jogadores 2×2; 6 jogadores 3×3 ou 2×2×2): vezes alternadas,
    ninguém mira o parceiro e a equipe vencedora tem 5 regiões (ou sobrou só ela).
    No Tutorial (sempre 4): o lugar 0 é o "humano" (jogado pelo bot normal) contra
-   3 bots fracos; ele vence com 3 regiões inteiras (ou sobra de pé) e os bots
-   só vencem sobrando de pé. Mostra quanto o "humano" vence (bots mais fracos).
+   3 bots fracos; ele vence com 3 regiões inteiras (ou sobra de pé) e um bot
+   vence com 5 regiões ou eliminando-o. Mostra quanto o "humano" vence.
    Sorte combinada (online): a cada 10 partidas, uma "gêmea" com a mesma
    semente é jogada pela lista de jogadas (aplicarAcao) e tem de terminar
    idêntica — é o que garante que todos os aparelhos veem a mesma partida.
@@ -154,7 +154,7 @@ for (const modo of MODOS) {
       const k = e.vencedor === 0 ? "humano (" + motivo + ")" : "bot fraco";
       porVencedor[k] = (porVencedor[k] || 0) + 1;
       if (motivo === "tutorial" && (e.vencedor !== 0 || J.regioesDominadas(e, 0).length < J.REGIOES_TUTORIAL)) quebra("vitória do tutorial sem as 3 regiões");
-      if (motivo === "derrota" && (e.jogadores[0].vivo || e.vencedor !== e.jogadores[0].eliminadoPor)) quebra("derrota no tutorial errada");
+      if (motivo === "derrota" && (e.vencedor === 0 || (e.jogadores[0].vivo ? J.regioesDominadas(e, e.vencedor).length < 5 : e.vencedor !== e.jogadores[0].eliminadoPor))) quebra("derrota no tutorial errada");
       if (["tutorial", "ultimo", "derrota"].indexOf(motivo) === -1) quebra("motivo estranho no tutorial: " + motivo);
     }
     if (modo === "equipes" && motivo !== "ultimo") {

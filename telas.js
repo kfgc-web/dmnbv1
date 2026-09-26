@@ -379,7 +379,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         '<p class="objTexto">' + descreverMeta(estado, HUMANO) + " Não dá para atacar o parceiro nem passar exércitos para ele.</p>";
     } else if (estado.modo === "tutorial") {
       html += '<p class="objNome">Regiões fechadas: ' + Math.min(regioesDominadas(estado, HUMANO).length, REGIOES_TUTORIAL) + " de " + REGIOES_TUTORIAL + "</p>" +
-        '<p class="objTexto">Feche ' + REGIOES_TUTORIAL + " regiões inteiras, à sua escolha.</p>" +
+        '<p class="objTexto">Feche ' + REGIOES_TUTORIAL + " regiões inteiras, à sua escolha. Se um adversário dominar " + REGIOES_PARA_VENCER + ", ele vence.</p>" +
         (tutorial() ? '<div class="tutBotoes"><button class="mini" id="tutDicas">Dicas</button><button class="ghost mini" id="tutPular">Pular tutorial</button></div>' : "");
     } else if (estado.modo === "rapida") {
       html += '<p class="objNome">Seus pontos: ' + pontosRapida(estado, HUMANO) + '</p><p class="objTexto">' + MODOS.rapida.resumo + "</p>";
@@ -1005,7 +1005,9 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function fimTutorial(venceu) {
     const ov = document.getElementById("overlay");
     const f = window.TUTORIAL.htmlFim(venceu);
-    if (window.TUTORIAL) window.TUTORIAL.parar();
+    window.TUTORIAL.parar();
+    if (!venceu) f.texto = (estado.jogadores[HUMANO].vivo ? nomeDe(estado.vencedor) + " dominou " + REGIOES_PARA_VENCER + " regiões inteiras. "
+      : "Seu último território caiu. ") + f.texto;
     ov.innerHTML =
       '<div class="modal modalVitoria modalTutorial">' +
         "<h2>" + f.titulo + "</h2>" +

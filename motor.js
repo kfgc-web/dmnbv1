@@ -115,7 +115,9 @@ const CARTAS_TROCA_OBRIGATORIA = 5; // com 5+ na mão, troca antes de posicionar
 //   equipes:  duplas ou trios sorteados; vence a equipe com 5 das 8 regiões.
 //   tutorial: partida guiada (só sozinho): você + 3 bots mais fracos (bots.js);
 //             você vence ao fechar REGIOES_TUTORIAL regiões inteiras, na hora.
-//             Os bots só vencem sendo o último de pé.
+//             Um bot vence com 5 regiões (como no Domínio) ou eliminando você —
+//             sem isso, partidas só de bots empacavam (bot com 6 regiões e
+//             exércitos aos milhares, sem nunca vencer).
 const MODOS = {
   tutorial: { nome: "Tutorial", resumo: "Uma partida guiada contra 3 bots mais fracos: feche 3 regiões inteiras, à sua escolha." },
   classico: { nome: "Clássico", resumo: "Cada um recebe um objetivo secreto. Vence quem cumprir o seu primeiro." },
@@ -394,10 +396,15 @@ function vikingsCumpriram(estado, idJogador) {
   return META_VIKINGS.every(function (r) { return dom.indexOf(r) !== -1; });
 }
 
-// Tutorial: o jogador (não os bots) já fechou as regiões pedidas?
+// Tutorial: o jogador fechou as 3 regiões pedidas, ou um bot fechou 5?
 function tutorialCumprido(estado, idJogador) {
   const j = estado.jogadores[idJogador];
-  return j.tipo === "humano" && j.vivo && regioesDominadas(estado, idJogador).length >= REGIOES_TUTORIAL;
+  const meta = j.tipo === "humano" ? REGIOES_TUTORIAL : REGIOES_PARA_VENCER;
+  return j.vivo && regioesDominadas(estado, idJogador).length >= meta;
+}
+// Como acabou o Tutorial para quem venceu: "tutorial" (o jogador) ou "derrota" (um bot).
+function motivoTutorial(estado, idJogador) {
+  return estado.jogadores[idJogador].tipo === "humano" ? "tutorial" : "derrota";
 }
 
 // Texto da meta do jogador nos modos sem objetivo secreto (p/ o painel).
@@ -511,7 +518,7 @@ function checarNaHora(estado) {
   else if (modo === "grande" && vikingsCumpriram(estado, estado.vez))
     declararVitoria(estado, estado.vez, { motivo: "vikings" });
   else if (modo === "tutorial" && tutorialCumprido(estado, estado.vez))
-    declararVitoria(estado, estado.vez, { motivo: "tutorial" });
+    declararVitoria(estado, estado.vez, { motivo: motivoTutorial(estado, estado.vez) });
 }
 
 // Símbolo da carta de um território (fixo: segue a ordem de mapa.js,
@@ -1175,7 +1182,8 @@ function passarVez(estado) {
 
   // Vitória do jogador da vez? (pela condição do modo: regiões, objetivo, meta viking)
   if (verificarVitoria(estado, estado.vez)) {
-    const motivo = { classico: "objetivo", grande: "vikings", equipes: "equipeRegioes", tutorial: "tutorial" }[estado.modo] || "regioes";
+    const motivo = estado.modo === "tutorial" ? motivoTutorial(estado, estado.vez)
+      : { classico: "objetivo", grande: "vikings", equipes: "equipeRegioes" }[estado.modo] || "regioes";
     declararVitoria(estado, estado.vez, { motivo: motivo });
     return { ok: true, vencedor: estado.vez, carta: carta };
   }
