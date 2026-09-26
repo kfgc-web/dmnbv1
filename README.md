@@ -30,7 +30,7 @@ Conquistou pelo menos um território no turno? Ganha uma **carta**. Três símbo
 ### Modos de jogo
 
 - **Tutorial:** novo no jogo? Comece aqui. Uma partida guiada contra 3 bots mais fracos: balões explicam cada passo e você vence ao fechar 3 regiões inteiras, à sua escolha.
-- **Clássico:** cada um recebe um objetivo secreto (17 possíveis). Vence quem cumprir o seu primeiro.
+- **Clássico:** cada um recebe um objetivo secreto (32 possíveis, dos mais fáceis aos dificílimos). Vence quem cumprir o seu primeiro.
 - **Domínio:** vence quem dominar 5 das 8 regiões inteiras.
 - **Conquista Total:** só vence o último de pé.
 - **Partida Rápida:** 15 rodadas; no fim, cada território vale 1 ponto, ou 3 se a região inteira for sua.
@@ -85,7 +85,7 @@ Conquered at least one territory this turn? You draw a **card**. Three matching 
 ### Game modes
 
 - **Tutorial:** new to the game? Start here. A guided match against 3 weaker bots: speech bubbles explain each step, and you win by holding any 3 regions entirely.
-- **Classic:** everyone gets a secret objective (17 in total). The first to complete theirs wins.
+- **Classic:** everyone gets a secret objective (32 in total, from easy to brutal). The first to complete theirs wins.
 - **Domination:** hold 5 of the 8 regions entirely.
 - **Total Conquest:** last one standing wins.
 - **Quick Match:** 15 rounds; at the end each territory is worth 1 point, or 3 if you hold its whole region.

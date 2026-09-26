@@ -193,9 +193,10 @@ function botBonusObjetivo(estado, id, alvo, donoAlvo) {
   if (!obj) return 0;
   if (obj.tipo === "regioes") {
     const r = regiaoDe(alvo);
-    if (obj.regioes.indexOf(r) === -1) return 0;
     const terrs = territoriosDaRegiao(r);
     const meus = terrs.filter(function (t) { return estado.territorios[t].dono === id; }).length;
+    // regiões à escolha: qualquer região ajuda (menos que as citadas pelo nome)
+    if (obj.regioes.indexOf(r) === -1) return obj.extra ? 20 + meus * 6 : 0;
     return 60 + meus * 8;
   }
   if (obj.tipo === "destruir") {
