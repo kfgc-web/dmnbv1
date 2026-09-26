@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 26/09/2026 (revanche e modo Tutorial testados por Kauã).
+Última atualização: 26/09/2026 (15 objetivos novos no Clássico).
 
 ---
 
@@ -78,7 +78,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Revanche:** no fim, quem criou a sala (se tiver ido embora, o juiz) vê **"Jogar de novo"**; os outros veem "Esperando Fulano chamar a revanche…". Todos voltam juntos para a sala, com o mesmo modo, os mesmos lugares e cores (cada um pode trocar a cor e o criador ajusta o que quiser). Quem não estava lá fica com o lugar aberto e, ao reabrir o app ou o convite antigo, cai direto no seu lugar. Sem placar da sala (decisão de Kauã). Por dentro: nasce uma **sala nova** (código novo) e a jogada `{ t: "revanche", sala }` na lista da antiga leva todos para ela — assim não precisou mudar as regras do banco.
 - Limite aceito por Kauã: quem fuçar o navegador consegue espiar objetivos e cartas dos outros (esconder de verdade exigiria servidor pago). Dados e jogadas **não** dá para falsificar.
 
-### Objetivos do Clássico (17, aprovados por Kauã)
+### Objetivos do Clássico (32, aprovados por Kauã)
 1. Alto-Rei da Irlanda — Ériu + Dál Riata
 2. Rota de Dyflin — Ériu + Cymru
 3. Caminho do Grande Exército — Northhymbre + Mierce
@@ -91,7 +91,11 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 10. Bretwalda — 36 territórios
 11. Terra Assentada — 27 territórios com 2+ exércitos em cada
 12–17. Rixa de Sangue — eliminar o jogador de cor X (vermelho, azul, verde, âmbar, roxo, turquesa). Mira a **cor** (`alvoDaRixa`: quem estiver com `CORES[alvo]`), não o assento — no online cada um escolhe a cor. **Só é sorteada se a cor estiver na partida** (pedido de Kauã). Pode sair contra a própria cor (como no WAR); nesse caso, ou se outro jogador eliminar o alvo antes, vale **36 territórios** (objetivo reserva). Na vitória: em cima só "cumpriu o objetivo reserva Bretwalda (conquistar 36 territórios)"; na lista revelada, só o objetivo **original** de cada um (texto curto, pedido de Kauã). Durante a partida, o painel avisa quando a Rixa vira Bretwalda e o motivo.
-- Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`).
+18–32 (acrescentados em 26.9.2026; nomes aprovados por Kauã; no motor ficam antes das Rixas). % = quanto vence quem tira o objetivo (simulação, 4 bots; os antigos vão de 13% a 50%):
+- Regiões à escolha: **Senhor da Guerra** 2 (~45%) · **Rei Guerreiro** 3 (~30%) · **Grande Rei** 4 (~25%) · **Senhor das Ilhas** 5 (~21%) · **Imperador das Ilhas** 6 (~16%) · **Conquistador** 7 (~16%, ~21 rodadas) · **Senhor Absoluto** 8 = a ilha inteira (~16%, ~27 rodadas; na prática é vencer por último de pé — Kauã quis assim: "vai penar").
+- **Aliança de Alfredo** Westseaxe + Cymru + 1 · **Dique de Offa** Mierce + Cymru + 1 · **Ivar e Ubba** Northhymbre + East Engle + 1 · **Rei dos Anglo-Saxões** Westseaxe + Mierce + Northhymbre · **Danelaw** Northhymbre + Mierce + East Engle · **Mundo Gaélico** Ériu + Dál Riata + Alba · **Senhor dos Ingleses** Westseaxe + Mierce + East Engle + 1 · **De Dyflin a Eoforwic** Ériu + Cymru + Northhymbre + 1.
+- Todos com a mesma chance no sorteio (a Rixa sai menos que antes — aceito por Kauã). No motor: `tipo: "regioes"` com `regioes: []` e `extra: n` para "à escolha".
+- Bots perseguem o próprio objetivo (`botBonusObjetivo` em `bots.js`; regiões "à escolha" também puxam, com peso menor).
 
 ### Reforço "Modo B" (sequência guiada)
 - O bônus de cada região fica **preso à própria região**.
@@ -213,6 +217,7 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 
 14. **Revanche na mesma sala** (online).
 15. **Modo Tutorial**: 1º turno guiado por balões, bots fracos (~70%), 3 regiões à escolha, parabéns na 1ª troca, Dicas e Pular.
+16. **15 objetivos novos no Clássico** (32 no total): de 2 a 8 regiões à escolha e combinações de reinos.
 
 ## 8. Próximos passos (ordem combinada)
 

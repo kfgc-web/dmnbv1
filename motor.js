@@ -130,7 +130,8 @@ const MODOS = {
 const MODO_PADRAO = "dominio";
 
 // OBJETIVOS do modo Clássico (nomes de época; aprovados por Kauã).
-//   regioes: dominar todas as regiões da lista (+ "extra" regiões quaisquer).
+//   regioes: dominar todas as regiões da lista (+ "extra" regiões quaisquer;
+//     lista vazia = só regiões à escolha).
 //   territorios: ter pelo menos "qtd" territórios.
 //   territorios2: ter pelo menos "qtd" territórios com "min"+ exércitos em cada.
 //   destruir: eliminar o jogador do assento "alvo" (cor). Só é sorteado se
@@ -150,6 +151,23 @@ const OBJETIVOS = [
   { id: "eoforwic-lundenburg", nome: "De Eoforwic a Lundenburg", tipo: "regioes", regioes: ["Northhymbre", "Westseaxe"], extra: 0 },
   { id: "bretwalda", nome: "Bretwalda", tipo: "territorios", qtd: 36 },
   { id: "terra-assentada", nome: "Terra Assentada", tipo: "territorios2", qtd: 27, min: 2 },
+  // Acrescentados em 26.9.2026 (pedido e nomes aprovados por Kauã): regiões à
+  // escolha (2 a 8) e combinações de reinos com e sem uma região à escolha.
+  { id: "senhor-guerra", nome: "Senhor da Guerra", tipo: "regioes", regioes: [], extra: 2 },
+  { id: "rei-guerreiro", nome: "Rei Guerreiro", tipo: "regioes", regioes: [], extra: 3 },
+  { id: "grande-rei", nome: "Grande Rei", tipo: "regioes", regioes: [], extra: 4 },
+  { id: "senhor-ilhas", nome: "Senhor das Ilhas", tipo: "regioes", regioes: [], extra: 5 },
+  { id: "imperador-ilhas", nome: "Imperador das Ilhas", tipo: "regioes", regioes: [], extra: 6 },
+  { id: "conquistador", nome: "Conquistador", tipo: "regioes", regioes: [], extra: 7 },
+  { id: "senhor-absoluto", nome: "Senhor Absoluto", tipo: "regioes", regioes: [], extra: 8 },
+  { id: "alianca-alfredo", nome: "Aliança de Alfredo", tipo: "regioes", regioes: ["Westseaxe", "Cymru"], extra: 1 },
+  { id: "dique-offa", nome: "Dique de Offa", tipo: "regioes", regioes: ["Mierce", "Cymru"], extra: 1 },
+  { id: "ivar-ubba", nome: "Ivar e Ubba", tipo: "regioes", regioes: ["Northhymbre", "East Engle"], extra: 1 },
+  { id: "rei-anglo-saxoes", nome: "Rei dos Anglo-Saxões", tipo: "regioes", regioes: ["Westseaxe", "Mierce", "Northhymbre"], extra: 0 },
+  { id: "danelaw", nome: "Danelaw", tipo: "regioes", regioes: ["Northhymbre", "Mierce", "East Engle"], extra: 0 },
+  { id: "mundo-gaelico", nome: "Mundo Gaélico", tipo: "regioes", regioes: ["Ériu", "Dál Riata", "Alba"], extra: 0 },
+  { id: "senhor-ingleses", nome: "Senhor dos Ingleses", tipo: "regioes", regioes: ["Westseaxe", "Mierce", "East Engle"], extra: 1 },
+  { id: "dyflin-eoforwic", nome: "De Dyflin a Eoforwic", tipo: "regioes", regioes: ["Ériu", "Cymru", "Northhymbre"], extra: 1 },
   { id: "rixa-0", nome: "Rixa de Sangue", tipo: "destruir", alvo: 0 },
   { id: "rixa-1", nome: "Rixa de Sangue", tipo: "destruir", alvo: 1 },
   { id: "rixa-2", nome: "Rixa de Sangue", tipo: "destruir", alvo: 2 },
@@ -478,8 +496,12 @@ function descreverObjetivo(estado, idJogador) {
   const ef = objetivoEfetivo(estado, idJogador);
   const texto = function (o) {
     if (o.tipo === "regioes") {
+      if (!o.regioes.length) { // só regiões à escolha
+        return o.extra >= Object.keys(REGIOES).length ? "Conquistar as " + o.extra + " regiões (a ilha inteira)."
+          : "Conquistar " + o.extra + " regiões inteiras, à sua escolha.";
+      }
       return "Conquistar " + o.regioes.join(" e ") + " inteiras" +
-        (o.extra ? ", mais " + o.extra + " região à sua escolha" : "") + ".";
+        (o.extra ? ", mais " + o.extra + (o.extra > 1 ? " regiões" : " região") + " à sua escolha" : "") + ".";
     }
     if (o.tipo === "territorios") return "Conquistar " + o.qtd + " territórios.";
     if (o.tipo === "territorios2") return "Conquistar " + o.qtd + " territórios com pelo menos " + o.min + " exércitos em cada.";
