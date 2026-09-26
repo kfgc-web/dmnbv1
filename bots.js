@@ -32,6 +32,7 @@
        botValorAlvo(estado, id, alvo) — quanto vale conquistar tal território
        botAlvos(estado, id, t)   — vizinhos que o bot aceita atacar
                                    (no Grande Exército, os reinos só miram os vikings)
+       botFraco / botErra        — no Tutorial, os bots erram de propósito (5% das decisões)
    ============================================================ */
 
 
@@ -47,6 +48,34 @@ const BOT_MAX_ATAQUES_POR_TURNO = 300;
 // Folga ao reforçar uma fronteira: tento deixá-la com (exércitos do
 // alvo + esta folga), pra abrir o ataque com vantagem confortável.
 const BOT_FOLGA_REFORCO = 2;
+
+// Tutorial: bots "burrinhos", com uns 70% da esperteza (pedido de Kauã).
+// A cada decisão, erram de propósito com esta chance: trocam cartas só
+// quando é obrigatório, largam reforço num território qualquer, param de
+// atacar antes da hora ou atacam sem vantagem, esquecem de remanejar.
+// Medido (600 partidas de Domínio, 2 fracos × 2 normais nos mesmos lugares):
+// com 5% os fracos vencem 36% (sem erro, 45%) — chance de vitória ≈ 70% da
+// do bot normal. Com 30% o normal vencia 99,8% das vezes: fácil demais.
+const BOT_ERRO_TUTORIAL = 0.05;
+
+
+/* ----------------------------------------------------------------
+   BOT FRACO (modo Tutorial)
+   ----------------------------------------------------------------
+   Só os bots do Tutorial erram; o jogador humano (e, no stress, o bot que
+   joga no lugar dele) usa a cabeça inteira. A sorte do erro sai de
+   sorte(estado), como toda sorte do jogo.
+   ---------------------------------------------------------------- */
+function botFraco(estado, id) {
+  return estado.modo === "tutorial" && estado.jogadores[id].tipo === "bot";
+}
+function botErra(estado, id) {
+  return botFraco(estado, id) && sorte(estado) < BOT_ERRO_TUTORIAL;
+}
+// Um item qualquer da lista (sorte do jogo).
+function botQualquer(estado, lista) {
+  return lista[Math.floor(sorte(estado) * lista.length)];
+}
 
 
 /* ----------------------------------------------------------------
@@ -192,6 +221,8 @@ function botBonusObjetivo(estado, id, alvo, donoAlvo) {
 // territórios do bot (+2) e poupa coringas.
 function botTrocar(estado) {
   let trocas = 0;
+  // Tutorial: às vezes guarda as cartas (só troca se for obrigatório).
+  if (botErra(estado, estado.vez) && !trocaObrigatoria(estado)) return { ok: true, trocas: 0 };
   while (estado.fase === "reforco" && trocas < 10) {
     const trio = acharTroca(estado, estado.vez);
     if (!trio) break;
@@ -216,7 +247,9 @@ function botReforcar(estado) {
   (rf.ordem || []).forEach(function (r) {
     const qtd = (rf.porRegiao && rf.porRegiao[r]) || 0;
     if (qtd <= 0) return;
-    const alvo = botMelhorTerritorioPraReforco(estado, id, territoriosDaRegiao(r));
+    const alvo = botErra(estado, id)
+      ? botQualquer(estado, territoriosDaRegiao(r).filter(function (t) { return estado.territorios[t].dono === id; }))
+      : botMelhorTerritorioPraReforco(estado, id, territoriosDaRegiao(r));
     if (!alvo) return;
     const rr = posicionarReforco(estado, alvo, qtd);
     if (rr.ok) colocados += qtd;
@@ -233,6 +266,11 @@ function botReforcar(estado) {
   }
 
   // (2) REFORÇO-BASE (geral) — o que sobrou (== reforcosPendentes) nas fronteiras.
+  // Tutorial: às vezes larga tudo num território qualquer.
+  if (estado.reforcosPendentes > 0 && botErra(estado, id)) {
+    const qtd = estado.reforcosPendentes;
+    if (posicionarReforco(estado, botQualquer(estado, territoriosDe(estado, id)), qtd).ok) colocados += qtd;
+  }
   if (estado.reforcosPendentes > 0) {
     colocados += botEspalharGeral(estado, id, estado.reforcosPendentes);
   }
@@ -388,6 +426,19 @@ function botAtacar(estado) {
 
     if (melhor === null) break;              // nenhum ataque bom: encerra o ataque
 
+    // Tutorial: às vezes para antes da hora; às vezes ataca sem vantagem.
+    if (botErra(estado, id)) {
+      if (sorte(estado) < 0.5) break;
+      const ruins = [];
+      meus.forEach(function (o) {
+        if (estado.territorios[o].exercitos < 2) return;
+        botAlvos(estado, id, o).forEach(function (d) {
+          if (estado.territorios[o].exercitos <= estado.territorios[d].exercitos + 1) ruins.push({ origem: o, destino: d });
+        });
+      });
+      if (ruins.length) melhor = botQualquer(estado, ruins);
+    }
+
     const r = atacar(estado, melhor.origem, melhor.destino);
     ataques++;
     if (!r.ok) break;                        // segurança: erro inesperado, para
@@ -413,6 +464,7 @@ function botRemanejar(estado) {
 
   const TETO = 200; // cinto de segurança (o loop já termina sozinho)
   let movimentos = 0;
+  if (botErra(estado, id)) return { ok: true, moveu: 0 }; // Tutorial: esqueceu de remanejar
 
   while (movimentos < TETO) {
     const meus = territoriosDe(estado, id);

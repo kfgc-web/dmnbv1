@@ -78,10 +78,15 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   // (ações descritas como dado: veja aplicarAcao em motor.js)
   function jogar(acao) {
     acao.a = HUMANO;
+    const trava = tutorial() ? window.TUTORIAL.permite(acao) : null;
+    if (trava) return { ok: false, erro: trava };
     const r = aplicarAcao(estado, acao);
     if (r.ok && online) window.ONLINE.enviar(acao);
+    if (r.ok && tutorial()) window.TUTORIAL.depois(acao, r);
     return r;
   }
+  // Partida do Tutorial em andamento (tutorial.js guia com os balões).
+  function tutorial() { return !!estado && estado.modo === "tutorial" && !!window.TUTORIAL && window.TUTORIAL.ativo; }
 
   // texto preto ou branco conforme a cor de fundo
   function corTexto(hex) {
@@ -327,6 +332,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     renderMover(minhaVez);
     renderPlayers();
     renderLog();
+    if (tutorial()) window.TUTORIAL.aoRender();
     if (estado.vencedor !== null && !animando) agendarVitoria(900);
   }
 
@@ -343,8 +349,9 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     if (!minhaVez || escolhendoConquista) return;
     // Fase de reforço: sem botão — quando o total zera, a tela avança sozinha (3.4-bis).
     if (estado.fase === "ataque") {
-      box.appendChild(botao("Terminar ataque", "", acaoTerminarAtaque));
-      box.appendChild(botao("Passar vez", "ghost", acaoPassar));
+      const pode = tutorial() ? window.TUTORIAL.botoes() : { fimAtq: true, passar: true }; // turno guiado: um passo de cada vez
+      if (pode.fimAtq) box.appendChild(botao("Terminar ataque", "", acaoTerminarAtaque));
+      if (pode.passar) box.appendChild(botao("Passar vez", "ghost", acaoPassar));
     } else if (estado.fase === "remanejamento") {
       box.appendChild(botao("Passar vez", "primary", acaoPassar));
     }
@@ -370,6 +377,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       html += '<p class="objNome"><span class="eqTag">' + NOMES_EQUIPE[eq] + "</span> Sua equipe: " +
         regioesDaEquipe(estado, eq).length + "/5 regiões</p>" +
         '<p class="objTexto">' + descreverMeta(estado, HUMANO) + " Não dá para atacar o parceiro nem passar exércitos para ele.</p>";
+    } else if (estado.modo === "tutorial") {
+      html += '<p class="objNome">Regiões fechadas: ' + Math.min(regioesDominadas(estado, HUMANO).length, REGIOES_TUTORIAL) + " de " + REGIOES_TUTORIAL + "</p>" +
+        '<p class="objTexto">Feche ' + REGIOES_TUTORIAL + " regiões inteiras, à sua escolha. Se um adversário dominar " + REGIOES_PARA_VENCER + ", ele vence.</p>" +
+        (tutorial() ? '<div class="tutBotoes"><button class="mini" id="tutDicas">Dicas</button><button class="ghost mini" id="tutPular">Pular tutorial</button></div>' : "");
     } else if (estado.modo === "rapida") {
       html += '<p class="objNome">Seus pontos: ' + pontosRapida(estado, HUMANO) + '</p><p class="objTexto">' + MODOS.rapida.resumo + "</p>";
     } else {
@@ -378,6 +389,10 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     box.innerHTML = html;
     const b = box.querySelector("#objBtn");
     if (b) b.addEventListener("click", function () { objetivoOculto = !objetivoOculto; renderObjetivo(); });
+    const dc = box.querySelector("#tutDicas");
+    if (dc) dc.addEventListener("click", function () { window.TUTORIAL.dicas(); });
+    const pl = box.querySelector("#tutPular");
+    if (pl) pl.addEventListener("click", mostrarInicio);
   }
 
   // -------- conquista: quantos exércitos entram --------
@@ -395,6 +410,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
         '<p class="lead">Quantos exércitos entram vindos de <b>' + origem + "</b>?</p>" +
         '<div class="conqLinha">' + botoes + "</div>" +
         '<p class="conqResto">No máximo 3, sempre deixando 1 em ' + origem + ".</p>" +
+        (tutorial() ? window.TUTORIAL.nota("conquista") : "") +
       "</div>";
     ov.classList.add("on");
     ov.querySelectorAll(".conqOpcao").forEach(function (b) {
@@ -447,6 +463,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
           ? "Você está com " + mao.length + " cartas. Troque 3 antes de posicionar os reforços."
           : "Troque 3 símbolos iguais ou 3 diferentes (o coringa vale qualquer um). A próxima troca da mesa vale <b>+" +
             valorDaTroca(estado.trocasFeitas) + "</b>, e cada carta de território seu põe +2 nele.") + "</p>" +
+        (obrigatoria && tutorial() ? window.TUTORIAL.nota("obrigatoria") : "") +
         '<div class="mesaCartas" id="mesaCartas"></div>' +
         '<p class="trocaStatus" id="trocaStatus"></p>' +
         '<div class="trocaAcoes">' +
@@ -577,6 +594,8 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function onClick(t) {
     if (animando || escolhendoConquista || estado.vencedor !== null) return;
     if (estado.vez !== HUMANO) return;
+    const trava = tutorial() ? window.TUTORIAL.podeTocar() : null;
+    if (trava) return toast(trava);
     if (estado.fase === "reforco") cliqueReforco(t);
     else if (estado.fase === "ataque") cliqueAtaque(t);
     else if (estado.fase === "remanejamento") cliqueRemanejo(t);
@@ -781,8 +800,12 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
   function mostrarInicio() {
     const ov = document.getElementById("overlay");
     let modo = "classico", adv = 3, tamEquipe = 2, lado = REINOS_GRANDE[0];
+    if (window.TUTORIAL) window.TUTORIAL.parar(); // saiu (ou pulou) o tutorial
     const opcoesModo = Object.keys(MODOS).map(function (m) {
-      return '<button class="modoOpcao" data-modo="' + m + '" aria-pressed="false"><b>' + MODOS[m].nome + "</b><span>" + MODOS[m].resumo + "</span></button>";
+      const tut = m === "tutorial";
+      return '<button class="modoOpcao' + (tut ? " modoTutorial" : "") + '" data-modo="' + m + '" aria-pressed="false">' +
+        (tut ? '<em class="modoNovo">Novo no jogo? Comece aqui</em>' : "") +
+        "<b>" + MODOS[m].nome + "</b><span>" + MODOS[m].resumo + "</span></button>";
     }).join("");
     const opcoesLado = REINOS_GRANDE.map(function (r) {
       return '<button class="ladoOpcao" data-lado="' + r + '" aria-pressed="false"><span class="dot" style="background:' + COR_REINO[r] + '"></span>' + r + "</button>";
@@ -819,15 +842,17 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
       "</div>";
     ov.classList.add("on");
     const q = ov.querySelector("#advQty");
+    // o Tutorial aparece sempre (é sempre você + 3 bots)
+    const cabe = function (m, n) { return m === "tutorial" || modoDisponivel(m, n); };
     function atualizar() {
       const n = adv + 1;
-      if (!modoDisponivel(modo, n)) modo = "classico";
+      if (!cabe(modo, n)) modo = "classico";
       if (n !== 6) tamEquipe = 2;
       q.textContent = adv;
-      ov.querySelector("#advField").style.display = modo === "grande" ? "none" : "";
+      ov.querySelector("#advField").style.display = modo === "grande" || modo === "tutorial" ? "none" : "";
       ov.querySelectorAll(".modoOpcao").forEach(function (b) {
         const on = b.dataset.modo === modo;
-        b.style.display = modoDisponivel(b.dataset.modo, n) ? "" : "none";
+        b.style.display = cabe(b.dataset.modo, n) ? "" : "none";
         b.classList.toggle("sel", on); b.setAttribute("aria-pressed", on ? "true" : "false");
       });
       // Equipes: 4 jogadores = 2×2; 6 jogadores = 3×3 ou 2×2×2
@@ -955,6 +980,7 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
           d.original + "</span></div>";
       }).join("") + "</div>";
     }
+    if (estado.modo === "tutorial") return fimTutorial(venceu);
     const titulo = venceu ? "Vitória!" : equipes ? "Equipe " + NOMES_EQUIPE[eqV] + " venceu" : nomeV + " venceu";
     const abertura = venceu
       ? (equipes ? "A ilha é da sua equipe, comandante. " : "A ilha é sua, comandante. ")
@@ -975,10 +1001,31 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     });
   }
 
+  // Fim do Tutorial: vitória (3 regiões) ou derrota, com os botões de seguir.
+  function fimTutorial(venceu) {
+    const ov = document.getElementById("overlay");
+    const f = window.TUTORIAL.htmlFim(venceu);
+    window.TUTORIAL.parar();
+    if (!venceu) f.texto = (estado.jogadores[HUMANO].vivo ? nomeDe(estado.vencedor) + " dominou " + REGIOES_PARA_VENCER + " regiões inteiras. "
+      : "Seu último território caiu. ") + f.texto;
+    ov.innerHTML =
+      '<div class="modal modalVitoria modalTutorial">' +
+        "<h2>" + f.titulo + "</h2>" +
+        '<p class="lead">' + f.texto + "</p>" + f.extra +
+        '<div class="trocaAcoes">' + (venceu ? "" : '<button class="primary" id="tutDeNovo">Tentar de novo</button>') +
+        '<button class="' + (venceu ? "primary" : "ghost") + '" id="againBtn">Voltar à tela inicial</button></div>' +
+      "</div>";
+    ov.classList.add("on");
+    const dn = ov.querySelector("#tutDeNovo");
+    if (dn) dn.addEventListener("click", function () { novoJogo(JOGADORES_TUTORIAL - 1, "tutorial"); });
+    ov.querySelector("#againBtn").addEventListener("click", mostrarInicio);
+  }
+
   // nBots = adversários; opcoes = { tamanhoEquipe, lado } (Equipes / Grande Exército)
   function novoJogo(nBots, modo, opcoes) {
     opcoes = opcoes || {};
     if (online) window.ONLINE.sair({ manterSala: estado && estado.vencedor === null });
+    if (modo === "tutorial") nBots = JOGADORES_TUTORIAL - 1;
     let jogadores = [{ nome: "Você", tipo: "humano" }];
     for (let i = 1; i <= nBots; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
     if (modo === "grande") {
@@ -992,6 +1039,11 @@ const VIEW_W = DESENHO.largura, VIEW_H = DESENHO.altura;
     selecao = null; destinoSel = null; animando = false; escolhendoConquista = false;
     vitoriaAgendada = false; objetivoOculto = false;
     document.getElementById("overlay").classList.remove("on");
+    if (modo === "tutorial" && window.TUTORIAL) window.TUTORIAL.comecar({
+      estado: function () { return estado; }, humano: function () { return HUMANO; },
+      ocupado: function () { return animando || escolhendoConquista; },
+      render: render, mostrarInicio: mostrarInicio,
+    });
     render();
     if (estado.jogadores[estado.vez].tipo === "bot") rodarBots();
   }

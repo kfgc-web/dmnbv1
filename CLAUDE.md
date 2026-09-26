@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 25/09/2026 (revanche na mesma sala; tutorial definido com Kauã).
+Última atualização: 26/09/2026 (revanche na mesma sala; modo Tutorial).
 
 ---
 
@@ -21,11 +21,11 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Protocolo:** esclarecer → confirmar → **"pode ir"** → agir. Nada de mudar arquivos do jogo antes do OK explícito. Protótipos e maquetes para Kauã avaliar (fora do repositório) podem ser feitos antes.
 - **Publicação:** Claude grava num ramo `claude/...`, abre/usa o Pull Request e **junta ao `main` por conta própria** (autorizado por Kauã), depois avisa. O site atualiza sozinho em 1–2 minutos.
 - **A cada entrega, aumentar o número de versão** `?v=N` nos `<script>`/`<link>` do `index.html` **e `VERSAO` em `sw.js` para o mesmo N** (é o que faz o app instalado mostrar "Nova versão disponível"; o teste da tela confere que os dois batem). Arquivo novo do jogo → acrescentar na lista `ARQUIVOS` do `sw.js`.
-- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes; confere 66 cartas a cada turno, a vitória certa de cada modo e, a cada 10 partidas, uma "gêmea" com a mesma semente jogada pela lista de jogadas que tem de terminar idêntica). Precisa terminar em "tudo certo, zero falhas". **Toda sorte do motor tem de sair de `sorte(estado)`** (nunca `Math.random` nas regras nem nos bots), senão o online dessincroniza.
+- **Depois de mexer em `motor.js`, `bots.js` ou nas vizinhanças de `mapa.js`: rodar o stress dos bots** — `node ferramentas/stress.js` (3.000 partidas por modo, 2 a 6 jogadores — 9 no Grande Exército, 4/6 no Equipes, 4 no Tutorial; confere 66 cartas a cada turno, a vitória certa de cada modo e, a cada 10 partidas, uma "gêmea" com a mesma semente jogada pela lista de jogadas que tem de terminar idêntica). Precisa terminar em "tudo certo, zero falhas". **Toda sorte do motor tem de sair de `sorte(estado)`** (nunca `Math.random` nas regras nem nos bots), senão o online dessincroniza.
 - Ao fim de cada entrega, registrar no DESIGN.md as decisões que o Kauã deu na sessão (transcritas, com data e nº do PR). O DESIGN.md não precisa ser lido no início das sessões.
 - Mensagens de commit e PR dizem a decisão por trás da mudança, não só o que mudou.
 - **Depois de mexer no mapa:** rodar o gerador (§6) e confirmar "fronteiras que FALTAM/SOBRAM: nenhuma" e "divisas CURTAS: nenhuma".
-- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar), celular em pé (aviso de girar), celular deitado (mapa à esquerda, painel à direita, rolagem única), tablet em pé e o app (versão do sw.js, manifesto, funciona sem internet, aviso de versão nova e atualização). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
+- **Testar a tela antes de entregar:** `node ferramentas/teste-tela.js` (Playwright + Chromium; `--prints` salva prints em `ferramentas/prints/`). Abre o jogo num servidor local, joga e confere início com modos, Tutorial (os 7 passos guiados, travas, balões das novidades, Dicas, parabéns na 1ª troca, vitória, derrota, Pular, balão no celular), objetivo no painel, reforço, conquista 1/2/3, dados visíveis, troca obrigatória, zoom, painel recolhido, vitória do Clássico, turnos com bots, Grande Exército (lado, começo, reforço do mar, placar), Equipes (marquinha, parceiro protegido), Partida Rápida (rodada, placar), celular em pé (aviso de girar), celular deitado (mapa à esquerda, painel à direita, rolagem única), tablet em pé e o app (versão do sw.js, manifesto, funciona sem internet, aviso de versão nova e atualização). Precisa terminar em "tudo certo". Ao criar algo novo na tela, acrescentar a checagem nesse script.
 - **Depois de mexer no online** (`rede.js`, `online.js`, regras do banco, ou nas jogadas do motor): `node ferramentas/teste-online.js` (`--prints` para prints). Sobe o emulador oficial do Firebase com `ferramentas/regras-firebase.json` e joga com vários "aparelhos": sala, convite, cor, modo, regras recusando estranho/trapaça, partida igual em todos a cada jogada, bots, jogador parado (botão), jogadas ao mesmo tempo, quem cai e volta, sair e voltar, Equipes montadas na sala, Grande Exército com reino escolhido. Precisa terminar em "tudo certo". Instalação (uma vez): `npm i --no-save --prefix ferramentas firebase@12.11.0 firebase-tools@15` (precisa de Java). No ambiente do Claude, rodar os testes com `NODE_PATH=$(npm root -g)` (o Playwright é global). O emulador é iniciado sem regras e as regras são publicadas por HTTP (o proxy do ambiente bloqueia o firebase-tools de fazer isso).
 
 ## 3. Regras do jogo
@@ -40,6 +40,12 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 - **Jogadores:** 2 a 6 (recomendado 4–6), humanos ou bots; Grande Exército sempre 9. Distribuição inicial: rodízio embaralhado, 1 exército por território (Grande Exército: começo fixo, abaixo). Sozinho: **um humano** ("Você") e o resto bots. Online: várias pessoas (cada uma no seu aparelho), o resto bots (§3, "Online").
 
 ### Modos de jogo (escolhidos na tela de início; padrão: Clássico)
+- **Tutorial** (só sozinho; primeiro da lista, com "Novo no jogo? Comece aqui"):
+  - Você + **3 bots fracos**: no Tutorial os bots erram de propósito em 5% das decisões (`BOT_ERRO_TUTORIAL` em `bots.js`: guardam as cartas, largam reforço num território qualquer, param de atacar cedo ou atacam sem vantagem, esquecem de remanejar). Medido: com 5% vencem ≈ 70% do que venceriam com a cabeça inteira (pedido de Kauã: "uns 70% da inteligência"); com 30% ficavam fáceis demais (o bot normal no lugar do jogador vencia 99,8%). No stress, o bot normal no lugar do jogador vence ~48% (um iniciante deve vencer menos: ajustar `BOT_ERRO_TUTORIAL` conforme o playtest).
+  - Começo e dados sorteados, como numa partida normal. **Vitória:** fechar **3 regiões inteiras à escolha** (`REGIOES_TUTORIAL`, na hora). Um bot vence com **5 regiões** (como no Domínio, mas na hora) ou eliminando o jogador (`motivo: "derrota"`) — sem isso, partidas empacavam (stress: bot com 6 regiões e exércitos aos milhares, sem nunca vencer). O painel avisa ("Se um adversário dominar 5, ele vence").
+  - **1º turno guiado** (`tutorial.js`): 7 balões — boas-vindas, mapa, reforço, ataque, dados, terminar o ataque, remanejar — e só dá para fazer o que o balão pede (`TUTORIAL.permite`; botões de terminar/passar aparecem na hora certa, piscando). Depois, **livre**, com um balão na 1ª vez de cada novidade: conquista (nota na janela), carta ganha, vez dos adversários, região fechada, 1ª troca possível, troca obrigatória (nota na janela), território perdido, adversário fechou região. Balão no canto de baixo à esquerda do mapa, recolhível (▾).
+  - **Completo na 1ª troca de cartas:** "Parabéns! Você completou o tutorial e está pronto para combater os Vikings!", com o resumo dos modos e Continuar jogando / Voltar à tela inicial. Vitória: mesma mensagem; derrota: "Os Vikings levaram a melhor desta vez! Quer tentar de novo?" (Tentar de novo / Voltar à tela inicial).
+  - No painel: "Regiões fechadas: X de 3" e os botões **Dicas** (todos os balões para rever) e **Pular tutorial** (volta à tela de início). Sem limite de tempo.
 - **Clássico:** cada jogador recebe um **objetivo secreto** diferente; vence quem cumprir o seu **na hora, durante o próprio turno** (checado após reforço, troca, ataque, conquista e remanejamento). O objetivo aparece no painel (botão Esconder/Mostrar) e todos são revelados na vitória.
 - **Domínio:** vence quem tiver **5 das 8 regiões inteiras** (checado ao fim do turno).
 - **Conquista Total:** só vence o **último de pé**.
@@ -60,7 +66,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
   - **Bônus de região da equipe:** região toda nas mãos da equipe conta como fechada; o bônus vai inteiro para o parceiro com mais territórios nela (empate: mais exércitos lá; depois, quem joga antes).
   - **Vitória:** equipe com **5 das 8 regiões** fechadas (somando parceiros; checado no fim do turno, como no Domínio) ou que eliminar todos os adversários.
   - Parceiro eliminado: o resto da equipe segue; cartas do eliminado vão para quem o eliminou. Marquinha da equipe (letra A/B/C) nas peças e na lista de jogadores.
-- A tela de início só mostra os modos que cabem no nº de jogadores (`modoDisponivel`).
+- A tela de início só mostra os modos que cabem no nº de jogadores (`modoDisponivel`); o Tutorial aparece sempre (é sempre 4). A sala online não oferece o Tutorial.
 
 ### Online (jogar com amigos) — decidido com Kauã
 - **Sala** com código de 5 letras + link de convite (`?sala=CODIGO`, entra direto). Quem **criou a sala** escolhe o modo e cada lugar (aberto para pessoa / bot / vazio; pode tirar alguém) e começa a partida; lugares abertos viram bot ao começar.
@@ -108,7 +114,7 @@ Jogo de estratégia de conquista no navegador, estilo **War/Risk**, ambientado n
 
 ## 4. Arquitetura — arquivos
 
-Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → rede.js → online.js → telas.js → app.js** (+ `estilo.css`), todos com `?v=N`.
+Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → desenho.js → cartas.js → rede.js → online.js → tutorial.js → telas.js → app.js** (+ `estilo.css`), todos com `?v=N`.
 
 | Arquivo | Papel |
 |---|---|
@@ -122,6 +128,7 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 | `telas.js` | Toda a interface: tabuleiro, painel, janelas (início, troca de cartas, conquista, vitória), dados, zoom |
 | `rede.js` | Conversa com a nuvem (Firebase Realtime Database, projeto `domination-britannia`, plano Spark): carrega o Firebase **só quando alguém escolhe jogar online**, login anônimo, salas, lugares, presença (conectado/desconectado), lista de jogadas. Formato do banco no topo do arquivo |
 | `online.js` | Tela de entrada/sala e a partida online: refaz a partida pela lista de jogadas, fila de envio das minhas jogadas, juiz dos bots, 10 s de quem caiu, botão do parado (60 s) |
+| `tutorial.js` | Modo Tutorial: textos dos balões, passos do 1º turno guiado e o que cada um deixa fazer, balões das novidades, Dicas, tela de parabéns e fim. A tela chama `window.TUTORIAL` (`permite`, `podeTocar`, `botoes`, `depois`, `aoRender`, `nota`) |
 | `app.js` | O jogo como app: registra o `sw.js`, aviso "Nova versão disponível" (só recarrega quando o jogador toca), botão "Instalar" (quando o navegador oferece), trava deitado no app instalado |
 | `sw.js` | Service worker: guarda os arquivos (`ARQUIVOS`, com `VERSAO`) para abrir sem internet; versão nova espera o toque no aviso; guarda também as fontes do Google |
 | `manifest.webmanifest` | Dados do app: nome "Domination: Britannia" (curto "Domination"), tela cheia, **deitado**, ícones |
@@ -133,11 +140,11 @@ Ordem de carregamento no `index.html`: **mapa.js → motor.js → bots.js → de
 ### motor.js — API
 Toda ação devolve `{ ok: true, ... }` ou `{ ok: false, erro: "mensagem PT-BR" }`.
 
-**Ações:** `criarPartida(jogadores, { modo, tamanhoEquipe, semente, equipesProntas })` · `calcularReforcos` → `{ base, porRegiao, ordem, mar, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma) · `aplicarAcao(estado, acao)` — uma jogada descrita como dado (`{ t: "ref"|"fimRef"|"troca"|"atq"|"conq"|"fimAtq"|"rem"|"passar"|"bot", a, ... }`); é assim que a tela joga e o online guarda a partida.
+**Ações:** `criarPartida(jogadores, { modo, tamanhoEquipe, semente, equipesProntas })` (modo `tutorial`: 4 jogadores, o humano fecha `REGIOES_TUTORIAL`) · `calcularReforcos` → `{ base, porRegiao, ordem, mar, total }` · `posicionarReforco(estado, t, qtd)` · `terminarReforco` · `trocarCartas(estado, [i, j, k])` · `atacar(estado, origem, destino, opcoes)` · `moverNaConquista(estado, total)` · `terminarAtaque` · `remanejar(estado, origem, destino, qtd)` · `passarVez` (devolve `carta` quando o jogador ganhou uma) · `aplicarAcao(estado, acao)` — uma jogada descrita como dado (`{ t: "ref"|"fimRef"|"troca"|"atq"|"conq"|"fimAtq"|"rem"|"passar"|"bot", a, ... }`); é assim que a tela joga e o online guarda a partida.
 
 **Consultas:** `territoriosDe`, `contarExercitos`, `regioesDominadas`, `inimigosVizinhos`, `ehFronteira`, `frescosEm`, `jogadoresVivos`, `verificarVitoria`, `resumoJogadores`, `acharTroca`, `trocaValida`, `valorDaTroca`, `simboloDoTerritorio`, `trocaObrigatoria`, `objetivoCumprido`, `objetivoEfetivo`, `descreverObjetivo`, `descreverMeta`, `modoDisponivel`, `saoAliados`, `membrosDaEquipe`, `regioesDaEquipe`, `pontosRapida`, `ehViking`. Dados dos modos/objetivos: `MODOS`, `OBJETIVOS`, `OBJETIVO_RESERVA`, `RODADAS_RAPIDA`, `REINOS_GRANDE`, `COR_REINO`, `META_VIKINGS`, `NOMES_EQUIPE`. Fins de partida: `finalizarRapida`, `finalizarGrande` (desempate em `desempatar`).
 
-**Estado** (dado simples, pronto para salvar/enviar): `modo`, `semente` + `rng` (sorte combinada: mesma semente + mesmas jogadas = mesma partida em qualquer aparelho), `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico, `reino` e `pontos` no Grande Exército, `equipe` no Equipes, e `eliminadoPor`), `vez`, `turno` (rodada), `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `resultado` (como acabou: `motivo` = objetivo/regioes/ultimo/rapida/vikings/reinos/equipeRegioes, + placar e desempate), `ultimoGolpe`, `ultimoEvento`, `log`. A ordem dos assentos é a ordem de jogada.
+**Estado** (dado simples, pronto para salvar/enviar): `modo`, `semente` + `rng` (sorte combinada: mesma semente + mesmas jogadas = mesma partida em qualquer aparelho), `territorios`, `jogadores` (cada um com `cartas`, `objetivo` no Clássico, `reino` e `pontos` no Grande Exército, `equipe` no Equipes, e `eliminadoPor`), `vez`, `turno` (rodada), `fase`, `reforcosPendentes`, `reforco`, `movidos`, `baralho`, `descarte`, `trocasFeitas`, `conquistouNoTurno`, `conquista`, `vencedor`, `resultado` (como acabou: `motivo` = objetivo/regioes/ultimo/rapida/vikings/reinos/equipeRegioes/tutorial/derrota, + placar e desempate), `ultimoGolpe`, `ultimoEvento`, `log`. A ordem dos assentos é a ordem de jogada.
 
 ### Tela — pontos-chave
 - Mapa estilo WAR: cada território é uma área pintada com a **cor da sua região**; divisa fina entre territórios, grossa entre regiões; peças (discos) com a **cor do dono** e o nº de exércitos. Tocar no território ou na peça.
@@ -205,10 +212,11 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 13. **Autoria:** README (PT + EN, com prints), LICENSE proprietário, aviso de © no início, DESIGN.md com o registro das decisões de Kauã e `historico/` com os documentos de julho. Online testado por Kauã ("aparentemente funciona"). Grande Exército: descrição explica os pontos e o dilema de atacar os aliados; reinos-bots passam a revidar.
 
 14. **Revanche na mesma sala** (online).
+15. **Modo Tutorial**: 1º turno guiado por balões, bots fracos (~70%), 3 regiões à escolha, parabéns na 1ª troca, Dicas e Pular.
 
 ## 8. Próximos passos (ordem combinada)
 
 1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
 2. **Online** — entregue (histórico 12) e testado por Kauã; revanche entregue (histórico 14). Ideias para depois: bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
-3. **Modo Tutorial** — definido com Kauã, em construção: você contra 3 bots com ~70% da esperteza; começo e dados sorteados; objetivo = 3 regiões à escolha; 1º turno guiado passo a passo por balões (só dá para fazer o que o balão pede), depois livre com balões na 1ª vez de cada novidade; completo ao fazer a 1ª troca de cartas (tela "Parabéns… pronto para combater os Vikings!" com Continuar jogando / Voltar à tela inicial); botões "Pular tutorial" e "Dicas"; primeiro na lista com "Novo no jogo? Comece aqui". Textos dos balões: ver DESIGN.md.
+3. **Modo Tutorial** — entregue (histórico 15). Falta o playtest de Kauã.
 4. Ideias anotadas (sem pressa, Kauã não achou necessárias por ora): **salvar a partida sozinho**, estatísticas; som e música, bate-papo (analisar depois); objetivos do tipo "3 regiões à escolha" no Clássico.

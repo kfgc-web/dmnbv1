@@ -20,6 +20,9 @@
    reino vivo com mais pontos quando os vikings caem.
    No Equipes (4 jogadores 2×2; 6 jogadores 3×3 ou 2×2×2): vezes alternadas,
    ninguém mira o parceiro e a equipe vencedora tem 5 regiões (ou sobrou só ela).
+   No Tutorial (sempre 4): o lugar 0 é o "humano" (jogado pelo bot normal) contra
+   3 bots fracos; ele vence com 3 regiões inteiras (ou sobra de pé) e um bot
+   vence com 5 regiões ou eliminando-o. Mostra quanto o "humano" vence.
    Sorte combinada (online): a cada 10 partidas, uma "gêmea" com a mesma
    semente é jogada pela lista de jogadas (aplicarAcao) e tem de terminar
    idêntica — é o que garante que todos os aparelhos veem a mesma partida.
@@ -38,7 +41,8 @@ for (const f of ["mapa.js", "motor.js", "bots.js"]) {
 // funções/constantes do jogo, vistas daqui (const/let não viram globais no vm)
 const J = vm.runInContext(`({ criarPartida, jogarTurnoBot, jogadoresVivos, verificarVitoria,
   objetivoCumprido, descreverObjetivo, MODOS, pontosRapida, regioesDaEquipe, inimigosVizinhos,
-  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS, aplicarAcao, atacar, botAlvos, vizinhosDe })`, ctx);
+  saoAliados, territoriosDe, ehViking, regioesDominadas, RODADAS_RAPIDA, META_VIKINGS, INICIO_VIKINGS, aplicarAcao, atacar, botAlvos, vizinhosDe,
+  REGIOES_TUTORIAL })`, ctx);
 
 const PARTIDAS = Number(process.argv[2]) || 3000;
 const MODOS = process.argv[3] ? [process.argv[3]] : Object.keys(J.MODOS);
@@ -72,10 +76,10 @@ for (const modo of MODOS) {
   const quebra = function (msg) { quebras++; if (quebras <= 5) console.log("QUEBRA [" + modo + "]:", msg); };
   for (let g = 0; g < PARTIDAS; g++) {
     // 2 a 6 jogadores; Grande Exército sempre 9; Equipes: 2×2, 3×3 ou 2×2×2
-    const n = modo === "grande" ? 9 : modo === "equipes" ? [4, 6, 6][g % 3] : 2 + (g % 5);
+    const n = modo === "grande" ? 9 : modo === "equipes" ? [4, 6, 6][g % 3] : modo === "tutorial" ? 4 : 2 + (g % 5);
     const tam = modo === "equipes" && g % 3 === 1 ? 3 : 2;
     const jogadores = [];
-    for (let i = 0; i < n; i++) jogadores.push({ nome: "Bot " + i, tipo: "bot" });
+    for (let i = 0; i < n; i++) jogadores.push({ nome: "Bot " + i, tipo: modo === "tutorial" && i === 0 ? "humano" : "bot" });
     const e = J.criarPartida(jogadores, { modo: modo, tamanhoEquipe: tam });
     if (e.modo !== modo || e.jogadores.length !== n) quebra("modo ou nº de jogadores errado");
     if (modo === "grande") {
@@ -146,6 +150,13 @@ for (const modo of MODOS) {
         if (vk.vivo || !v.vivo || J.ehViking(e, e.vencedor) || v.pontos !== max) quebra("vitória dos reinos errada");
       } else if (motivo !== "ultimo") quebra("motivo estranho: " + motivo);
     }
+    if (modo === "tutorial") {
+      const k = e.vencedor === 0 ? "humano (" + motivo + ")" : "bot fraco";
+      porVencedor[k] = (porVencedor[k] || 0) + 1;
+      if (motivo === "tutorial" && (e.vencedor !== 0 || J.regioesDominadas(e, 0).length < J.REGIOES_TUTORIAL)) quebra("vitória do tutorial sem as 3 regiões");
+      if (motivo === "derrota" && (e.vencedor === 0 || (e.jogadores[0].vivo ? J.regioesDominadas(e, e.vencedor).length < 5 : e.vencedor !== e.jogadores[0].eliminadoPor))) quebra("derrota no tutorial errada");
+      if (["tutorial", "ultimo", "derrota"].indexOf(motivo) === -1) quebra("motivo estranho no tutorial: " + motivo);
+    }
     if (modo === "equipes" && motivo !== "ultimo") {
       if (motivo !== "equipeRegioes" || J.regioesDaEquipe(e, e.jogadores[e.vencedor].equipe).length < 5) quebra("equipe venceu sem 5 regiões");
     }
@@ -164,7 +175,7 @@ for (const modo of MODOS) {
     console.log("vitórias por objetivo:", Object.entries(porObjetivo).sort(function (a, b) { return b[1] - a[1]; })
       .map(function (p) { return p[0] + " " + p[1]; }).join(" · "));
   }
-  if (modo === "grande") {
+  if (modo === "grande" || modo === "tutorial") {
     console.log("vencedores:", Object.entries(porVencedor).sort(function (a, b) { return b[1] - a[1]; })
       .map(function (p) { return p[0] + " " + p[1]; }).join(" · "));
   }

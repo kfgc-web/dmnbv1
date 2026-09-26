@@ -262,7 +262,7 @@
     // modo
     html += '<div class="flabel" style="margin-bottom:8px">Modo de jogo</div>';
     if (host) {
-      html += '<div class="modos">' + Object.keys(MODOS).map(function (m) {
+      html += '<div class="modos">' + Object.keys(MODOS).filter(function (m) { return m !== "tutorial"; }).map(function (m) { // o Tutorial é só sozinho
         const pode = m === "grande" || humanos <= 6;
         return '<button class="modoOpcao' + (m === modo ? " sel" : "") + '" data-modo="' + m + '"' + (pode ? "" : " disabled") +
           ' aria-pressed="' + (m === modo) + '"><b>' + MODOS[m].nome + "</b><span>" + MODOS[m].resumo + "</span></button>";
