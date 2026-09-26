@@ -51,7 +51,7 @@
 
   let api = null;          // o que a tela entrega (estado, render, toast…)
   let passo = null;        // passo do 1º turno guiado (null = livre)
-  let fila = [];           // balões livres esperando: { id, texto, alvo }
+  let fila = [];           // balões livres esperando: { id, texto }
   let vistos = {};         // novidades já explicadas
   let completo = false;    // já fez a 1ª troca
   let conhecido = null;    // para perceber novidades: meus territórios, regiões de cada um

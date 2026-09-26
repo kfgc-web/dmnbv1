@@ -32,7 +32,7 @@
        botValorAlvo(estado, id, alvo) — quanto vale conquistar tal território
        botAlvos(estado, id, t)   — vizinhos que o bot aceita atacar
                                    (no Grande Exército, os reinos só miram os vikings)
-       botFraco / botErra        — no Tutorial, os bots erram de propósito (~30%)
+       botFraco / botErra        — no Tutorial, os bots erram de propósito (5% das decisões)
    ============================================================ */
 
 
