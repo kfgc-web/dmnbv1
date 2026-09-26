@@ -2,7 +2,7 @@
 
 *Este arquivo substitui o antigo documento de retomada anexado nos chats. O Claude Code o lê sozinho ao abrir o repositório; manter atualizado a cada entrega.*
 
-Última atualização: 26/09/2026 (revanche na mesma sala; modo Tutorial).
+Última atualização: 26/09/2026 (revanche e modo Tutorial testados por Kauã).
 
 ---
 
@@ -218,5 +218,5 @@ node ferramentas/gerar-mapa.js --previa   # + ferramentas/previa-mapa.png
 
 1. ~~Playtest do app no celular~~ — aprovado por Kauã ("ficou perfeito").
 2. **Online** — entregue (histórico 12) e testado por Kauã; revanche entregue (histórico 14). Ideias para depois: bate-papo, cronômetro de turno (Kauã preferiu o botão do parado).
-3. **Modo Tutorial** — entregue (histórico 15). Falta o playtest de Kauã.
+3. **Modo Tutorial** — entregue (histórico 15) e testado por Kauã junto com a revanche ("Deu tudo certo"). Força dos bots e a regra das 5 regiões aceitas.
 4. Ideias anotadas (sem pressa, Kauã não achou necessárias por ora): **salvar a partida sozinho**, estatísticas; som e música, bate-papo (analisar depois); objetivos do tipo "3 regiões à escolha" no Clássico.
