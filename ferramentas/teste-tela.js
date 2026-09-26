@@ -2,7 +2,7 @@
    DOMINATION: BRITANNIA — ferramentas/teste-tela.js
    Teste da TELA num navegador de verdade (Chromium, via Playwright).
    Abre o jogo, joga um pouco e confere as partes principais — inclusive
-   os modos Grande Exército, Equipes e Partida Rápida.
+   os modos Grande Exército, Equipes e Partida Rápida, e o Tutorial.
    Rodar antes de entregar qualquer mudança na tela.
 
    Uso (na raiz do repositório):
@@ -79,7 +79,8 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
       return pg.$$eval(".modoOpcao", function (x) { return x.filter(function (e) { return e.offsetParent !== null; }).map(function (e) { return e.dataset.modo; }); });
     };
     const modos = await modosVisiveis(p);
-    checar("tela de início mostra os 6 modos (com 4 jogadores)", modos.length === 6, modos.join(", "));
+    checar("tela de início mostra os 7 modos (com 4 jogadores), o Tutorial em primeiro", modos.length === 7 && modos[0] === "tutorial", modos.join(", "));
+    checar("Tutorial com o destaque 'Novo no jogo? Comece aqui'", (await p.$eval('.modoOpcao[data-modo="tutorial"]', function (b) { return b.textContent; })).indexOf("Novo no jogo? Comece aqui") >= 0);
     checar("aviso de © na tela de início", await p.$eval(".inicioCopy", function (e) {
       return e.offsetParent !== null && e.textContent.indexOf("© 2026 Kauã Felipe Gielow Camargo") === 0;
     }));
@@ -277,6 +278,109 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     await print(r, "11-rapida-fim");
     checar("nenhum erro no console (Partida Rápida)", r.erros.length === 0, r.erros.join(" | "));
 
+    // ---------- Tutorial ----------
+    console.log("\nTutorial");
+    const tu = await abrir(browser, { width: 1400, height: 1000 });
+    await tu.click('.modoOpcao[data-modo="tutorial"]');
+    checar("no Tutorial some o nº de adversários", await tu.$eval("#advField", function (e) { return e.style.display === "none"; }));
+    await tu.click("#startBtn"); await tu.waitForTimeout(400);
+    const passoTxt = function () { return tu.evaluate(function () { const b = document.getElementById("balao"); return b && !b.hidden ? b.innerText.replace(/\s+/g, " ") : ""; }); };
+    const et = await tu.evaluate(function () { const e = window.__e(); return { modo: e.modo, n: e.jogadores.length, tipos: e.jogadores.map(function (j) { return j.tipo; }).join(",") }; });
+    checar("Tutorial: você + 3 bots", et.modo === "tutorial" && et.n === 4 && et.tipos === "humano,bot,bot,bot", JSON.stringify(et));
+    checar("balão de boas-vindas (passo 1 de 7)", /Passo 1 de 7.*Bem-vindo/i.test(await passoTxt()), await passoTxt());
+    const pend0 = await tu.evaluate(function () { return window.__e().reforcosPendentes; });
+    const destT = function () { return tu.$$eval("path.territorio", function (ps) { return ps.map(function (x, i) { return x.classList.contains("dest") ? i : -1; }).filter(function (i) { return i >= 0; }); }); };
+    await (await tu.$$(".node .disc"))[(await destT())[0]].click({ force: true }); await tu.waitForTimeout(100);
+    checar("enquanto o balão pede para ler, o mapa não aceita jogada", (await tu.evaluate(function () { return window.__e().reforcosPendentes; })) === pend0 &&
+      (await tu.$eval("#toast", function (e) { return e.textContent; })).indexOf("Entendi") >= 0);
+    await tu.click("#balaoOk"); await tu.waitForTimeout(100);
+    checar("passo 2: o mapa, com os nomes das regiões piscando", /Passo 2 de 7/i.test(await passoTxt()) && (await tu.$$(".rotuloRegiao.tutPulso")).length === 8);
+    await tu.click("#balaoOk"); await tu.waitForTimeout(100);
+    checar("passo 3: reforço", /Passo 3 de 7.*reforços/i.test(await passoTxt()));
+    await print(tu, "17-tutorial-reforco");
+    for (let k = 0; k < 40 && (await tu.$eval("#phaseTag", function (e) { return e.textContent; })) === "Reforço"; k++) {
+      const d = await destT();
+      if (!d.length) { await tu.waitForTimeout(300); continue; }
+      await (await tu.$$(".node .disc"))[d[0]].click({ force: true }); await tu.waitForTimeout(40);
+    }
+    await tu.waitForTimeout(500);
+    checar("passo 4: ataque, sem botões de terminar nem passar", /Passo 4 de 7/i.test(await passoTxt()) && (await tu.$$("#actions button")).length === 0, await passoTxt());
+    await tu.evaluate(function () {
+      const e = window.__e();
+      e.territorios.Lundenburg.dono = 0; e.territorios.Lundenburg.exercitos = 15;
+      e.territorios.Cent.dono = 1; e.territorios.Cent.exercitos = 1;
+      window.__render();
+    });
+    const nomesT = await tu.$$eval(".node .terr", function (ts) { return ts.map(function (t) { return t.textContent; }); });
+    const discoT = async function (n) { return (await tu.$$(".node .disc"))[nomesT.indexOf(n)]; };
+    await (await discoT("Lundenburg")).click({ force: true }); await tu.waitForTimeout(80);
+    let notaConq = false;
+    for (let i = 0; i < 12; i++) {
+      await (await discoT("Cent")).click({ force: true }); await tu.waitForTimeout(900);
+      if (await tu.$eval("#overlay", function (e) { return e.classList.contains("on"); })) { notaConq = !!(await tu.$(".modalConquista .tutNota")); break; }
+    }
+    checar("na 1ª conquista, a janela explica o 1, 2 ou 3", notaConq);
+    if (await tu.$(".conqOpcao")) { await tu.click('.conqOpcao[data-n="1"]'); await tu.waitForTimeout(200); }
+    checar("passo 5: os dados", /Passo 5 de 7.*Empate é da defesa/i.test(await passoTxt()), await passoTxt());
+    await tu.click("#balaoOk"); await tu.waitForTimeout(150);
+    const bts = await tu.$$eval("#actions button", function (b) { return b.map(function (x) { return x.textContent + (x.classList.contains("tutPulso") ? "*" : ""); }); });
+    checar("passo 6: só 'Terminar ataque', piscando", /Passo 6 de 7/i.test(await passoTxt()) && bts.join() === "Terminar ataque*", bts.join());
+    await tu.click('#actions button:has-text("Terminar ataque")'); await tu.waitForTimeout(150);
+    checar("passo 7: remanejar, com 'Passar vez' piscando", /Passo 7 de 7/i.test(await passoTxt()) && !!(await tu.$("#actions button.tutPulso")));
+    await tu.click('#actions button:has-text("Passar vez")'); await tu.waitForTimeout(200);
+    checar("ao passar: a carta ganha é explicada", /carta/.test(await passoTxt()), await passoTxt());
+    await tu.click("#balaoOk"); await tu.waitForTimeout(100);
+    checar("depois: a vez dos adversários", /adversários jogam/.test(await passoTxt()), await passoTxt());
+    await tu.click("#balaoOk");
+    for (let w = 0; w < 80 && (await tu.$eval("#turnWho", function (e) { return e.textContent; })) !== "Você"; w++) await tu.waitForTimeout(250);
+    checar("os bots jogam e a vez volta para você", (await tu.$eval("#turnWho", function (e) { return e.textContent; })) === "Você");
+    await tu.click("#tutDicas");
+    checar("botão Dicas mostra todos os balões", (await tu.$$(".tutDicas dt")).length === 15);
+    await tu.click("#dicasFechar");
+    // 1ª troca de cartas = tutorial completo
+    await tu.evaluate(function () {
+      const e = window.__e(); const meus = Object.keys(e.territorios).filter(function (t) { return e.territorios[t].dono === 0; });
+      e.fase = "reforco"; e.reforcosPendentes = 3; e.reforco = { base: 3, porRegiao: {}, ordem: [] };
+      e.jogadores[0].cartas = [{ t: meus[0], s: "espada" }, { t: meus[1], s: "escudo" }, { t: meus[2], s: "navio" }];
+      window.__render();
+    });
+    await tu.waitForTimeout(100);
+    while (/perdido|Tomaram|Cuidado|fechou/.test(await passoTxt())) { await tu.click("#balaoOk"); await tu.waitForTimeout(80); }
+    checar("com 3 cartas, o balão ensina a troca (e o botão pisca)", /trocar cartas/i.test(await passoTxt()) && !!(await tu.$("#cartasBtn.tutPulso")), await passoTxt());
+    await tu.click("#cartasBtn"); await tu.click("#trocaMelhor"); await tu.click("#trocaOk");
+    const parab = await tu.waitForSelector(".modalTutorial", { timeout: 3000 }).then(function () { return true; }, function () { return false; });
+    checar("1ª troca: 'Parabéns, você completou o tutorial…' com Continuar e Voltar", parab &&
+      (await tu.$eval(".modalTutorial", function (e) { return e.innerText; })).indexOf("pronto para combater os Vikings") >= 0 &&
+      !!(await tu.$("#tutContinuar")) && !!(await tu.$("#tutInicio")));
+    await print(tu, "18-tutorial-parabens");
+    await tu.click("#tutContinuar");
+    checar("Continuar jogando volta para a partida", !(await tu.$eval("#overlay", function (e) { return e.classList.contains("on"); })) &&
+      (await tu.evaluate(function () { return window.__e().fase; })) === "reforco");
+    // vitória do tutorial
+    await tu.evaluate(function () { const e = window.__e(); declararVitoria(e, 0, { motivo: "tutorial" }); window.__render(); });
+    await tu.waitForTimeout(1300);
+    checar("vitória no Tutorial: parabéns e os outros modos", (await tu.$eval(".modal", function (e) { return e.innerText; })).indexOf("completou o tutorial") >= 0 && (await tu.$$(".tutModos li")).length === 6);
+    await tu.click("#againBtn");
+    // derrota: tentar de novo
+    await tu.click('.modoOpcao[data-modo="tutorial"]'); await tu.click("#startBtn"); await tu.waitForTimeout(300);
+    await tu.evaluate(function () { const e = window.__e(); e.jogadores[0].vivo = false; declararVitoria(e, 1, { motivo: "derrota" }); window.__render(); });
+    await tu.waitForTimeout(1300);
+    checar("derrota no Tutorial oferece 'Tentar de novo'", (await tu.$eval(".modal", function (e) { return e.innerText; })).indexOf("Quer tentar de novo") >= 0 && !!(await tu.$("#tutDeNovo")));
+    await tu.click("#tutDeNovo"); await tu.waitForTimeout(300);
+    checar("tentar de novo recomeça o tutorial do passo 1", /Passo 1 de 7/i.test(await passoTxt()));
+    await tu.click("#tutPular");
+    checar("Pular tutorial volta para a tela de início (sem balão)", !!(await tu.$(".modalInicio")) && (await passoTxt()) === "");
+    checar("nenhum erro no console (Tutorial)", tu.erros.length === 0, tu.erros.join(" | "));
+    // celular deitado: balão cabe e dá para recolher
+    const tc = await abrir(browser, { width: 844, height: 390 });
+    await tc.click('.modoOpcao[data-modo="tutorial"]'); await tc.click("#startBtn"); await tc.waitForTimeout(300);
+    const cabeBalao = await tc.evaluate(function () { const r = document.getElementById("balao").getBoundingClientRect(), s = document.getElementById("boardScroll").getBoundingClientRect(); return r.left >= s.left && r.right <= s.right && r.top >= s.top && r.bottom <= s.bottom; });
+    checar("celular deitado: o balão cabe dentro do mapa", cabeBalao);
+    await tc.click("#balaoRecolher");
+    checar("dá para recolher o balão e abrir de novo", !!(await tc.$("#balaoAbrir")) && (await tc.click("#balaoAbrir"), !!(await tc.$("#balaoOk"))));
+    await print(tc, "19-tutorial-celular");
+    checar("nenhum erro no console (Tutorial no celular)", tc.erros.length === 0, tc.erros.join(" | "));
+
     // ---------- celular em pé: aviso de girar ----------
     console.log("\nCelular em pé (390 x 844)");
     const cp = await abrir(browser, { width: 390, height: 844 });
@@ -353,7 +457,7 @@ const print = async function (p, nome) { if (PRINTS) await p.screenshot({ path: 
     checar("service worker guarda os arquivos do jogo", guardados.controla && guardados.n >= 17, JSON.stringify(guardados));
     await ctx.setOffline(true);
     await a.reload(); await a.waitForTimeout(500);
-    checar("sem internet o jogo abre", (await a.$$(".modoOpcao")).length === 6);
+    checar("sem internet o jogo abre", (await a.$$(".modoOpcao")).length === 7);
     await a.click("#startBtn"); await a.waitForTimeout(300);
     checar("sem internet dá para começar partida", (await a.$eval("#phaseTag", function (e) { return e.textContent; })) === "Reforço");
     await ctx.setOffline(false);

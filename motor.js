@@ -43,7 +43,7 @@
    FORMATO DO ESTADO (tudo é dado simples, fácil de salvar/enviar):
      estado = {
        territorios: { "Defnas": { dono: 0, exercitos: 1 }, ... },
-       modo:        "dominio",        // chave de MODOS (classico, dominio, total, rapida, grande, equipes)
+       modo:        "dominio",        // chave de MODOS (tutorial, classico, dominio, total, rapida, grande, equipes)
        semente, rng:  números da sorte combinada (todo dado/embaralhada sai daqui)
        jogadores:   [ { id, nome, tipo, cor, vivo, cartas: [ {t, s}, ... ],
                         objetivo (só no clássico), eliminadoPor (id de quem o eliminou),
@@ -113,7 +113,11 @@ const CARTAS_TROCA_OBRIGATORIA = 5; // com 5+ na mão, troca antes de posicionar
 //             (1 por território; 3 por território de região inteira sua).
 //   grande:   Grande Exército — 9 assentos fixos: os Vikings contra os 8 reinos.
 //   equipes:  duplas ou trios sorteados; vence a equipe com 5 das 8 regiões.
+//   tutorial: partida guiada (só sozinho): você + 3 bots mais fracos (bots.js);
+//             você vence ao fechar REGIOES_TUTORIAL regiões inteiras, na hora.
+//             Os bots só vencem sendo o último de pé.
 const MODOS = {
+  tutorial: { nome: "Tutorial", resumo: "Uma partida guiada contra 3 bots mais fracos: feche 3 regiões inteiras, à sua escolha." },
   classico: { nome: "Clássico", resumo: "Cada um recebe um objetivo secreto. Vence quem cumprir o seu primeiro." },
   dominio:  { nome: "Domínio", resumo: "Vence quem dominar 5 das 8 regiões inteiras." },
   total:    { nome: "Conquista Total", resumo: "Só vence o último de pé. Partida longa." },
@@ -176,6 +180,10 @@ const META_VIKINGS = ["Northhymbre", "Mierce", "East Engle", "Westseaxe"];
 
 // EQUIPES
 const NOMES_EQUIPE = ["A", "B", "C"];
+
+// TUTORIAL
+const REGIOES_TUTORIAL = 3;           // regiões inteiras (à sua escolha) para vencer
+const JOGADORES_TUTORIAL = 4;         // você + 3 bots
 
 
 /* ----------------------------------------------------------------
@@ -343,6 +351,7 @@ function pontosRapida(estado, idJogador) {
 // Equipes só com 4 ou 6; os outros de 2 a 6.)
 function modoDisponivel(modo, n) {
   if (modo === "grande") return true;
+  if (modo === "tutorial") return n === JOGADORES_TUTORIAL;
   if (modo === "equipes") return n === 4 || n === 6;
   return n >= 2 && n <= 6;
 }
@@ -372,6 +381,7 @@ function verificarVitoria(estado, idJogador) {
   if (modo === "total" || modo === "rapida") return false;
   if (modo === "classico") return objetivoCumprido(estado, idJogador);
   if (modo === "grande") return vikingsCumpriram(estado, idJogador);
+  if (modo === "tutorial") return tutorialCumprido(estado, idJogador);
   if (modo === "equipes")
     return regioesDaEquipe(estado, estado.jogadores[idJogador].equipe).length >= REGIOES_PARA_VENCER;
   return regioesDominadas(estado, idJogador).length >= REGIOES_PARA_VENCER;
@@ -382,6 +392,12 @@ function vikingsCumpriram(estado, idJogador) {
   if (!ehViking(estado, idJogador) || !estado.jogadores[idJogador].vivo) return false;
   const dom = regioesDominadas(estado, idJogador);
   return META_VIKINGS.every(function (r) { return dom.indexOf(r) !== -1; });
+}
+
+// Tutorial: o jogador (não os bots) já fechou as regiões pedidas?
+function tutorialCumprido(estado, idJogador) {
+  const j = estado.jogadores[idJogador];
+  return j.tipo === "humano" && j.vivo && regioesDominadas(estado, idJogador).length >= REGIOES_TUTORIAL;
 }
 
 // Texto da meta do jogador nos modos sem objetivo secreto (p/ o painel).
@@ -494,6 +510,8 @@ function checarNaHora(estado) {
     declararVitoria(estado, estado.vez, { motivo: "objetivo" });
   else if (modo === "grande" && vikingsCumpriram(estado, estado.vez))
     declararVitoria(estado, estado.vez, { motivo: "vikings" });
+  else if (modo === "tutorial" && tutorialCumprido(estado, estado.vez))
+    declararVitoria(estado, estado.vez, { motivo: "tutorial" });
 }
 
 // Símbolo da carta de um território (fixo: segue a ordem de mapa.js,
@@ -1031,8 +1049,11 @@ function atacar(estado, origem, destino, opcoes) {
       vitima.cartas = [];
       anotar(estado, estado.jogadores[estado.vez].nome + " ficou com " + herdadas + " carta(s) de " + vitima.nome + ".");
     }
+    // Tutorial: o jogador caiu -> fim (quem o eliminou vence).
+    if (estado.modo === "tutorial" && vitima.tipo === "humano" && !vitima.vivo) {
+      declararVitoria(estado, estado.vez, { motivo: "derrota" });
     // Grande Exército: os Vikings caíram -> fim, vence o reino com mais pontos.
-    if (ehViking(estado, donoAntigo) && !vitima.vivo) {
+    } else if (ehViking(estado, donoAntigo) && !vitima.vivo) {
       estado.ultimoGolpe = estado.vez;
       finalizarGrande(estado);
     } else {
@@ -1154,7 +1175,7 @@ function passarVez(estado) {
 
   // Vitória do jogador da vez? (pela condição do modo: regiões, objetivo, meta viking)
   if (verificarVitoria(estado, estado.vez)) {
-    const motivo = { classico: "objetivo", grande: "vikings", equipes: "equipeRegioes" }[estado.modo] || "regioes";
+    const motivo = { classico: "objetivo", grande: "vikings", equipes: "equipeRegioes", tutorial: "tutorial" }[estado.modo] || "regioes";
     declararVitoria(estado, estado.vez, { motivo: motivo });
     return { ok: true, vencedor: estado.vez, carta: carta };
   }

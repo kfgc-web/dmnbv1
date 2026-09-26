@@ -307,6 +307,40 @@
     padding:8px 10px; display:flex; flex-direction:column; gap:8px; }
   .prow.off .pname{ color:#f0a39d; }
   .modal.modalSaida{ max-width:400px; }
+  /* ---------- tutorial ---------- */
+  .modoOpcao.modoTutorial{ border-color:var(--bone-dim); }
+  .modoNovo{ font-style:normal; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--bone); }
+  #balao{ position:fixed; z-index:15; background:rgba(22,27,34,.97); border:1px solid var(--bone); border-radius:12px;
+    padding:12px 14px; box-shadow:0 12px 40px rgba(0,0,0,.55); display:flex; flex-direction:column; align-items:flex-start; gap:8px;
+    animation:balaoEntra .25s ease-out; }
+  #balao[hidden]{ display:none; }
+  @keyframes balaoEntra{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+  #balao.recolhido{ padding:4px; background:transparent; border:none; box-shadow:none; }
+  #balao.recolhido button{ background:rgba(22,27,34,.97); border-color:var(--bone); }
+  .balaoTopo{ display:flex; align-items:center; justify-content:space-between; gap:10px; align-self:stretch; }
+  .balaoTopo button{ padding:1px 8px; }
+  .balaoPasso{ font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--bone); }
+  .balaoTexto{ margin:0; font-size:13.5px; line-height:1.5; color:var(--text); }
+  .balaoTexto b{ color:var(--bone); }
+  .balaoCor{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:baseline; }
+  #balaoOk{ align-self:flex-end; }
+  .tutPulso{ animation:tutPulso 1.2s ease-in-out infinite; }
+  button.tutPulso, #reinf.tutPulso{ box-shadow:0 0 0 2px var(--bone); border-radius:8px; }
+  text.tutPulso{ fill:#f3e6c4; }
+  @keyframes tutPulso{ 50%{ opacity:.55; } }
+  .tutNota{ font-size:12.5px; line-height:1.5; color:var(--text); background:#2a2418; border:1px solid var(--bone-dim);
+    border-radius:8px; padding:8px 10px; margin:12px 0 0; }
+  .modalCartas .tutNota{ margin:0 0 12px; }
+  .tutBotoes{ display:flex; gap:6px; margin-top:8px; }
+  .tutSub{ font-size:13px; color:var(--muted); margin:0 0 8px; }
+  .tutModos{ margin:0 0 18px; padding-left:18px; font-size:13px; line-height:1.6; color:var(--text); }
+  .tutModos b{ color:var(--bone); font-weight:600; }
+  .modal.modalDicas{ max-width:520px; max-height:90vh; overflow:auto; }
+  .tutDicas{ margin:8px 0 18px; }
+  .tutDicas dt{ font-family:"Cinzel",serif; color:var(--bone); font-size:13px; margin-top:10px; }
+  .tutDicas dd{ margin:2px 0 0; font-size:13px; line-height:1.5; color:var(--text); }
+  .tutDicas dd b{ color:var(--bone); }
+
   /* revanche: na janela de vitória online */
   #onRevancheBox{ margin-bottom:8px; }
   .onRevNota{ font-size:12.5px; color:var(--muted); text-align:center; margin:6px 0 2px; }
@@ -376,6 +410,8 @@
     .modal.modalInicio{ max-width:640px; }
     .conqOpcao{ width:54px; height:54px; }
     #toast{ bottom:10px; }
+    #balao{ padding:8px 10px; gap:5px; }
+    .balaoTexto{ font-size:12.5px; line-height:1.4; }
   }
 
   /* ---------- responsive ---------- */
